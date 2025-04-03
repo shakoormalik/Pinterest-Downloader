@@ -31,19 +31,19 @@ async function processPinterestUrl(input: PinterestUrlInput) {
       quality = "hd";
     }
     
-    // Use Unsplash API for sample images (no API key required for these specific URLs)
-    // This is more reliable than placekitten for our demo
-    const imageId = parseInt(pinId.replace(/\D/g, '')) % 1000; // Convert pin ID to a number for deterministic images
+    // Use static image URLs that are more reliable for our demo
+    // Pinterest ID deterministically maps to one of 5 demo images
+    const imageNumber = (parseInt(pinId.replace(/\D/g, '')) % 5) + 1;
     
-    // Create a simulated response with real images
+    // Create a simulated response with reliable images
     const mediaData = {
       url: input.url,
       mediaType,
       quality,
-      thumbnailUrl: `https://source.unsplash.com/200x200/?pinterest,${mediaType === "video" ? "video" : "photo"},${imageId}`,
+      thumbnailUrl: `https://picsum.photos/id/${imageNumber * 10}/200/200`, // Reliable placeholder images
       mediaUrl: mediaType === "video" 
-        ? `https://assets.mixkit.co/videos/preview/mixkit-tree-with-yellow-flowers-1173-large.mp4` // Sample video
-        : `https://source.unsplash.com/1200x1200/?pinterest,photo,${imageId}`,
+        ? `https://www.w3schools.com/html/mov_bbb.mp4` // Public sample video
+        : `https://picsum.photos/id/${imageNumber * 10}/1200/1200`,
       metadata: {
         width: mediaType === "video" ? 1920 : 1200,
         height: mediaType === "video" ? 1080 : 1200,

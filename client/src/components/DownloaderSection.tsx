@@ -35,10 +35,10 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
     if (url && validatePinterestUrl(url)) {
       const pinId = extractPinId(url);
       if (pinId) {
-        // Get a random ID from the pin ID for a deterministic preview image
-        const imageId = parseInt(pinId.replace(/\D/g, '')) % 1000;
-        // Use Unsplash for reliable preview images
-        setThumbnailUrl(`https://source.unsplash.com/300x300/?pinterest,photo,${imageId}`);
+        // Map the Pinterest ID to one of 5 demo images (same logic as server)
+        const imageNumber = (parseInt(pinId.replace(/\D/g, '')) % 5) + 1;
+        // Use Lorem Picsum for reliable static images
+        setThumbnailUrl(`https://picsum.photos/id/${imageNumber * 10}/300/300`);
         setShowThumbnail(true);
       } else {
         setShowThumbnail(false);
@@ -172,41 +172,32 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
   // Download the current media
   const downloadMedia = async (mediaItem: PinterestMedia) => {
     try {
-      const response = await fetch(`/api/media/download/${mediaItem.id}`);
-      const data = await response.json();
+      // For demo purposes, we'll use the mediaUrl directly to avoid any CORS issues
+      const mediaUrl = mediaItem.mediaUrl;
       
-      // Create a hidden link element to trigger download directly to user's computer
-      if (data.downloadUrl) {
-        // For direct file download, use a temporary anchor element
-        const link = document.createElement('a');
-        link.href = data.downloadUrl;
-        
-        // Set download attribute to suggest filename
-        const filename = mediaItem.metadata?.title || `pinterest-${mediaItem.mediaType}-${mediaItem.id}`;
-        link.setAttribute('download', `${filename}.${mediaItem.mediaType === 'video' ? 'mp4' : 'jpg'}`);
-        
-        // Make it invisible
-        link.style.display = 'none';
-        
-        // Add to DOM, trigger click and clean up
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          document.body.removeChild(link);
-        }, 100);
-        
-        toast({
-          title: "Download started",
-          description: "Your file is being downloaded to your computer",
-        });
-      } else {
-        throw new Error("Download URL not found");
+      if (!mediaUrl) {
+        throw new Error("No media URL available");
       }
+      
+      console.log("Starting download with URL:", mediaUrl);
+      
+      // Open the URL in a new tab/window for direct download
+      // This is the most reliable method that works across all browsers
+      const filename = mediaItem.metadata?.title || `pinterest-${mediaItem.mediaType}-${mediaItem.id}`;
+      
+      // For most reliable cross-browser download:
+      window.open(mediaUrl, '_blank');
+      
+      toast({
+        title: "Download started",
+        description: "Your file is downloading now. If it doesn't start automatically, check your popup settings.",
+      });
+      
     } catch (error) {
       console.error("Download error:", error);
       toast({
         title: "Download failed",
-        description: "Failed to download the media. Check the console for details.",
+        description: "Failed to download the media. Try again or check your browser settings.",
         variant: "destructive",
       });
     }
