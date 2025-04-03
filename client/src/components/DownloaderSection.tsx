@@ -125,10 +125,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
       const text = await navigator.clipboard.readText();
       if (validatePinterestUrl(text)) {
         setUrl(text);
-        toast({
-          title: "URL pasted",
-          description: "Pinterest URL pasted from clipboard",
-        });
+        // Removed toast notification to avoid popup
       } else {
         toast({
           title: "Invalid URL",
@@ -147,26 +144,16 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
 
   // Handle download button click
   const handleDownload = () => {
-    if (!url) {
+    if (!currentMedia) {
       toast({
-        title: "URL required",
-        description: "Please enter a Pinterest URL",
+        title: "No media to download",
+        description: "Please fetch a Pinterest URL first",
         variant: "destructive",
       });
       return;
     }
     
-    if (!validatePinterestUrl(url)) {
-      toast({
-        title: "Invalid URL",
-        description: "Please enter a valid Pinterest URL",
-        variant: "destructive",
-      });
-      onDownloadError("Invalid URL format", "Please ensure your link starts with 'https://pinterest.com/pin/' or 'https://pin.it/'");
-      return;
-    }
-    
-    processUrl();
+    downloadMedia(currentMedia);
   };
 
   // Download the current media
@@ -287,15 +274,50 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                 <Button
                   type="button"
                   variant="default"
-                  className="rounded-l-none rounded-r-lg bg-neutral-900 hover:bg-black text-white dark:bg-neutral-800 dark:hover:bg-neutral-700 p-3"
-                  onClick={() => {
+                  disabled={thumbnailUrl === '' && showThumbnail}
+                  className="rounded-l-none rounded-r-lg bg-neutral-900 hover:bg-black text-white dark:bg-neutral-800 dark:hover:bg-neutral-700 px-4 py-3 flex items-center"
+                  onClick={async () => {
                     if (url && validatePinterestUrl(url)) {
-                      // Fetch thumbnail preview
-                      const pinId = extractPinId(url);
-                      if (pinId) {
+                      try {
+                        // Set loading state first
                         setShowThumbnail(true);
-                        // You could potentially make a lightweight API call here to get the thumbnail
-                        // For now we'll just show the thumbnail placeholder
+                        setThumbnailUrl(''); // Clear previous thumbnail
+                        
+                        // Process URL to get the actual media
+                        const response = await apiRequest('POST', '/api/media/process', {
+                          url: url.trim(),
+                          type: selectedFormat,
+                        });
+                        
+                        const mediaData: PinterestMedia = await response.json();
+                        
+                        // Set current media and show the thumbnail
+                        setCurrentMedia(mediaData);
+                        setThumbnailUrl(mediaData.thumbnailUrl || '');
+                        setShowPreview(true);
+                        
+                        // Add to recent history (local)
+                        const updatedHistory = [mediaData, ...recentHistory.slice(0, 4)];
+                        setRecentHistory(updatedHistory);
+                        
+                        // Invalidate history query
+                        queryClient.invalidateQueries({ queryKey: ['/api/media/history'] });
+                        
+                        toast({
+                          title: "Media found!",
+                          description: "Pinterest content is ready for download.",
+                        });
+                      } catch (error: any) {
+                        console.error("Error fetching preview:", error);
+                        setShowThumbnail(false);
+                        
+                        toast({
+                          title: "Failed to fetch preview",
+                          description: error.message || "Could not process this Pinterest URL",
+                          variant: "destructive",
+                        });
+                        
+                        onDownloadError("Failed to fetch preview", "Please check the URL and try again.");
                       }
                     } else {
                       toast({
@@ -305,13 +327,26 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       });
                     }
                   }}
-                  title="Fetch preview"
+                  title="Search and get preview"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M15 3h6v6" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M10 14L21 3" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+                  {thumbnailUrl === '' && showThumbnail ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Searching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="mr-2">Search</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M15 3h6v6" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M10 14L21 3" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </>
+                  )}
                 </Button>
               </div>
               
@@ -442,7 +477,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
               <Button
                 type="button"
                 onClick={handleDownload}
-                disabled={isProcessing}
+                disabled={!currentMedia || isProcessing}
                 className="w-full py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition duration-300 flex items-center justify-center"
               >
                 {isProcessing ? (
@@ -453,9 +488,14 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                     </svg>
                     <span>Processing...</span>
                   </>
+                ) : !currentMedia ? (
+                  <>
+                    <span>Enter URL and click search first</span>
+                    <Download className="ml-2 h-5 w-5" />
+                  </>
                 ) : (
                   <>
-                    <span>Download</span>
+                    <span>Download Now</span>
                     <Download className="ml-2 h-5 w-5" />
                   </>
                 )}

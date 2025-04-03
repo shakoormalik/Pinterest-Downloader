@@ -137,12 +137,88 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
       throw new Error('Could not extract media from Pinterest URL');
     }
     
-    // Estimate dimensions and size based on type
+    // Attempt to get actual dimensions from meta tags
+    let width = 0, height = 0, duration = 0;
+    
+    const ogImageWidth = $('meta[property="og:image:width"]').attr('content');
+    const ogImageHeight = $('meta[property="og:image:height"]').attr('content');
+    const ogVideoDuration = $('meta[property="og:video:duration"]').attr('content');
+    
+    if (ogImageWidth) width = parseInt(ogImageWidth);
+    if (ogImageHeight) height = parseInt(ogImageHeight);
+    if (ogVideoDuration) duration = parseInt(ogVideoDuration);
+    
+    // If we couldn't get dimensions from meta tags, try to estimate from URL patterns
+    if (!width || !height) {
+      // Pinterest images often have dimensions in the URL like "736x"
+      const dimensionMatch = mediaUrl.match(/\/([0-9]+)x\//);
+      if (dimensionMatch && dimensionMatch[1]) {
+        const dimension = parseInt(dimensionMatch[1]);
+        
+        if (mediaType === 'image') {
+          // Pinterest images are often square, but sometimes rectangular
+          // If dimension is for width (most common)
+          width = dimension;
+          height = dimension; // Assume square unless we find height
+          
+          // Look for height in URL (less common pattern)
+          const heightMatch = mediaUrl.match(/\/[0-9]+x([0-9]+)\//);
+          if (heightMatch && heightMatch[1]) {
+            height = parseInt(heightMatch[1]);
+          }
+        } else if (mediaType === 'video') {
+          // Videos are usually 16:9 ratio
+          if (dimension >= 720) {
+            // Likely width
+            width = dimension;
+            height = Math.round(dimension * 9 / 16);
+          } else {
+            // Might be height
+            height = dimension;
+            width = Math.round(dimension * 16 / 9);
+          }
+        }
+      }
+    }
+    
+    // If we still don't have dimensions, use realistic defaults based on format
+    if (!width || !height) {
+      if (type === 'hd_video') {
+        width = 1280;
+        height = 720;
+      } else if (type === 'hd_image') {
+        width = 1200;
+        height = 1200;
+      } else {
+        width = 736;
+        height = 736;
+      }
+    }
+    
+    // Calculate realistic file size based on dimensions and type
+    let size = 0;
+    if (mediaType === 'video') {
+      // Video size calculation (roughly 500KB per second for HD)
+      const videoDuration = duration || 15; // Default to 15 seconds if unknown
+      size = videoDuration * (type === 'hd_video' ? 500000 : 250000);
+    } else {
+      // Image size calculation (roughly 100KB per 100K pixels for JPG)
+      const pixelCount = width * height;
+      size = Math.round(pixelCount * 0.001);
+      
+      // Adjust based on quality
+      if (type === 'hd_image') {
+        size = Math.max(size, 800000); // At least 800KB for HD
+      } else {
+        size = Math.min(size, 500000); // Cap at 500KB for standard
+      }
+    }
+    
     const metadata = {
-      width: mediaType === 'video' ? 1280 : 1080,
-      height: mediaType === 'video' ? 720 : 1080,
-      duration: mediaType === 'video' ? 15 : undefined,
-      size: mediaType === 'video' ? 8400000 : 1200000, // Estimated sizes
+      width,
+      height,
+      duration: mediaType === 'video' ? (duration || 15) : undefined,
+      size,
       title: title
     };
     
