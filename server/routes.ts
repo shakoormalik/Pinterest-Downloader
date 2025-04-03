@@ -499,7 +499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Download media by ID
+  // Download media by ID - optimized for reliable file downloads
   app.get(`${apiPrefix}/media/download/:id`, async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
@@ -512,74 +512,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Media not found" });
       }
       
-      // For better file handling, we'll try to download and send the file properly
-      // with appropriate headers
-      try {
-        // Ensure we have a valid media URL
-        if (!media.mediaUrl) {
-          return res.status(400).json({ message: "Invalid media URL" });
-        }
+      // Ensure we have a valid media URL
+      if (!media.mediaUrl) {
+        return res.status(400).json({ message: "Invalid media URL" });
+      }
+      
+      // Get filename - either from metadata or generate one
+      let fileName = "";
+      if (media.metadata?.title) {
+        // Clean up the title to make a valid filename
+        const cleanTitle = media.metadata.title
+          .replace(/[^\w\s.-]/g, '')  // Remove special chars
+          .replace(/\s+/g, '_');      // Replace spaces with underscore
         
+        const extension = media.mediaType === 'video' ? 'mp4' : 'jpg';
+        fileName = `${cleanTitle}.${extension}`;
+      } else {
         // Extract filename from URL or use default
-        const urlObj = new URL(media.mediaUrl);
-        const pathSegments = urlObj.pathname.split('/');
-        let fileName = pathSegments[pathSegments.length - 1];
-        
-        // If we can't get a proper filename from the URL, create one
-        if (!fileName || fileName === '' || !fileName.includes('.')) {
+        try {
+          const urlObj = new URL(media.mediaUrl);
+          const pathSegments = urlObj.pathname.split('/');
+          fileName = pathSegments[pathSegments.length - 1];
+          
+          // If we can't get a proper filename from the URL, create one
+          if (!fileName || fileName === '' || !fileName.includes('.')) {
+            throw new Error('No valid filename in URL');
+          }
+        } catch (urlError) {
+          // Fallback to generated filename
+          const timestamp = Date.now().toString(36);
           const extension = media.mediaType === 'video' ? 'mp4' : 'jpg';
           const quality = media.quality === 'hd' ? 'HD' : 'Standard';
-          fileName = `pinterest_${id}_${quality}.${extension}`;
+          fileName = `pinterest_${media.mediaType}_${quality}_${timestamp}.${extension}`;
         }
-        
-        // Set content disposition to force download with filename
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        
-        // Attempt to stream the file - this works better for direct file access
-        // But still allow fall back to direct URL
-        try {
-          // Stream through server to handle CORS issues
-          const mediaResponse = await axios({
-            url: media.mediaUrl,
-            method: 'GET',
-            responseType: 'stream',
-            timeout: 15000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36',
-              'Referer': 'https://www.pinterest.com/'
-            }
-          });
-          
-          // Set response headers based on media response
-          const contentType = mediaResponse.headers['content-type'];
-          if (contentType) {
-            res.setHeader('Content-Type', contentType);
-          } else {
-            // Set default content type based on media type
-            res.setHeader('Content-Type', media.mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
-          }
-          
-          const contentLength = mediaResponse.headers['content-length'];
-          if (contentLength) {
-            res.setHeader('Content-Length', contentLength);
-          }
-          
-          // Stream the file to client
-          return mediaResponse.data.pipe(res);
-        } catch (streamError) {
-          console.log("Error streaming file, falling back to direct URL", streamError);
-          return res.json({ 
-            downloadUrl: media.mediaUrl,
-            fileName: fileName
-          });
-        }
-      } catch (fileError) {
-        console.error("Error processing file, returning direct URL", fileError);
-        return res.json({ downloadUrl: media.mediaUrl });
       }
-    } catch (error) {
-      console.error("Error downloading media:", error);
-      return res.status(500).json({ message: "Failed to download media" });
+      
+      try {
+        // Stream through server to handle CORS issues and improve download reliability
+        const mediaResponse = await axios({
+          url: media.mediaUrl,
+          method: 'GET',
+          responseType: 'stream',
+          timeout: 20000, // Increase timeout for larger files
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36',
+            'Referer': 'https://www.pinterest.com/',
+            'Accept': '*/*'
+          }
+        });
+        
+        // Set response headers for proper download
+        if (mediaResponse.headers['content-type']) {
+          res.setHeader('Content-Type', mediaResponse.headers['content-type']);
+        } else {
+          // Set default content type based on media type
+          res.setHeader('Content-Type', media.mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
+        }
+        
+        // Set content disposition with proper filename encoding
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+        
+        // Forward content length if available
+        if (mediaResponse.headers['content-length']) {
+          res.setHeader('Content-Length', mediaResponse.headers['content-length']);
+        }
+        
+        // Disable caching for downloads
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        
+        // Stream the file to client
+        mediaResponse.data.pipe(res);
+        
+        // Handle errors during streaming
+        mediaResponse.data.on('error', (err: Error) => {
+          console.error('Stream error:', err);
+          // Only send error if headers haven't been sent yet
+          if (!res.headersSent) {
+            res.status(500).json({ message: 'Error streaming file' });
+          }
+        });
+        
+      } catch (streamError: any) {
+        console.log("Error streaming file:", streamError.message);
+        
+        // If headers not sent, redirect to direct URL as fallback
+        if (!res.headersSent) {
+          res.redirect(media.mediaUrl);
+        }
+      }
+    } catch (error: any) {
+      console.error("Error downloading media:", error.message);
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          message: "Failed to download media",
+          error: error.message 
+        });
+      }
     }
   });
 

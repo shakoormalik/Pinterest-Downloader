@@ -169,48 +169,61 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
       const filename = mediaItem.metadata?.title || 
         `pinterest-${mediaItem.mediaType}-${Date.now().toString(36)}`;
       
-      // Use fetch API with blob for more reliable downloads
-      // This prevents CORS issues and handles large files better
       toast({
         title: "Starting download...",
         description: "Preparing your file, please wait.",
       });
       
       try {
-        // First try the modern approach with fetch
-        const response = await fetch(mediaUrl);
+        // Use our server endpoint to handle the download (avoids CORS issues)
+        const downloadUrl = `/api/media/download/${mediaItem.id}`;
         
-        if (!response.ok) throw new Error('Network response was not ok');
-        
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        
-        // Create temporary download link
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename + (mediaItem.mediaType === 'video' ? '.mp4' : '.jpg');
-        document.body.appendChild(a);
-        a.click();
-        
-        // Clean up
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(blobUrl); // Free memory
-        }, 100);
+        // Open in new tab for direct download
+        window.open(downloadUrl, '_blank');
         
         toast({
-          title: "Download successful!",
-          description: "Your file has been downloaded.",
+          title: "Download started",
+          description: "Your file should begin downloading automatically.",
         });
-      } catch (fetchError) {
-        console.log("Fetch download failed, falling back to window.open:", fetchError);
-        // Fallback method for older browsers or CORS issues
-        window.open(mediaUrl, '_blank');
+      } catch (serverError) {
+        console.log("Server download failed, trying direct method:", serverError);
         
-        toast({
-          title: "Download started in new tab",
-          description: "If it doesn't start automatically, check your popup settings.",
-        });
+        try {
+          // Fallback to fetch API for direct download
+          const response = await fetch(mediaUrl);
+          
+          if (!response.ok) throw new Error('Network response was not ok');
+          
+          const blob = await response.blob();
+          const blobUrl = window.URL.createObjectURL(blob);
+          
+          // Create temporary download link
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename + (mediaItem.mediaType === 'video' ? '.mp4' : '.jpg');
+          document.body.appendChild(a);
+          a.click();
+          
+          // Clean up
+          setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(blobUrl); // Free memory
+          }, 100);
+          
+          toast({
+            title: "Download successful!",
+            description: "Your file has been downloaded.",
+          });
+        } catch (fetchError) {
+          console.log("Fetch download failed, falling back to basic link:", fetchError);
+          // Last resort fallback
+          window.open(mediaUrl, '_blank');
+          
+          toast({
+            title: "Download started in new tab",
+            description: "If it doesn't start automatically, right-click and select 'Save As'.",
+          });
+        }
       }
     } catch (error) {
       console.error("Download error:", error);
@@ -325,7 +338,15 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         
                         // Set current media and show the thumbnail
                         setCurrentMedia(mediaData);
-                        setThumbnailUrl(mediaData.thumbnailUrl || '');
+                        // Make sure we have a valid thumbnail URL
+                        if (mediaData.thumbnailUrl) {
+                          setThumbnailUrl(mediaData.thumbnailUrl);
+                        } else if (mediaData.mediaUrl) {
+                          // If no thumbnail, use the media URL for images
+                          setThumbnailUrl(mediaData.mediaType === 'image' ? mediaData.mediaUrl : '');
+                        } else {
+                          setThumbnailUrl('');
+                        }
                         setShowPreview(true);
                         
                         // Add to recent history (local)
@@ -534,7 +555,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
           </div>
 
           {/* Preview Section */}
-          {showPreview && currentMedia && currentMedia.thumbnailUrl && (
+          {showPreview && currentMedia && (
             <div className="mt-8">
               <div className="border-t border-neutral-200 dark:border-neutral-700 pt-6">
                 <h3 className="text-lg font-semibold text-secondary dark:text-dark-text mb-4">Preview</h3>
@@ -552,9 +573,15 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         />
                       ) : (
                         <img 
-                          src={currentMedia.thumbnailUrl || ""} 
+                          src={currentMedia.thumbnailUrl || currentMedia.mediaUrl || ""} 
                           alt="Content preview" 
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // If thumbnail fails, try using the media URL as fallback
+                            if (e.currentTarget.src !== currentMedia.mediaUrl && currentMedia.mediaUrl) {
+                              e.currentTarget.src = currentMedia.mediaUrl;
+                            }
+                          }}
                         />
                       )}
                     </div>
@@ -656,12 +683,17 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       className="flex items-center bg-neutral-50 dark:bg-dark-bg rounded-lg p-3 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition duration-200"
                     >
                       <div className="w-16 h-16 bg-neutral-200 dark:bg-neutral-700 rounded overflow-hidden flex-shrink-0">
-                        {item.mediaType === 'video' ? (
+                        {item.mediaType === 'video' && (
                           <div className="relative w-full h-full">
                             <img 
-                              src={item.thumbnailUrl || ""} 
+                              src={item.thumbnailUrl || item.mediaUrl || ""}
                               alt="Video thumbnail" 
                               className="w-full h-full object-cover"
+                              onError={(e) => {
+                                if (e.currentTarget.src !== item.mediaUrl && item.mediaUrl) {
+                                  e.currentTarget.src = item.mediaUrl;
+                                }
+                              }}
                             />
                             <div className="absolute inset-0 flex items-center justify-center">
                               <div className="w-8 h-8 rounded-full bg-black bg-opacity-50 flex items-center justify-center">
@@ -671,13 +703,22 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                               </div>
                             </div>
                           </div>
-                        ) : item.thumbnailUrl ? (
+                        )}
+                        
+                        {item.mediaType !== 'video' && (item.thumbnailUrl || item.mediaUrl) && (
                           <img 
-                            src={item.thumbnailUrl || ""} 
+                            src={item.thumbnailUrl || item.mediaUrl || ""}
                             alt="Pinterest content" 
                             className="w-full h-full object-cover"
+                            onError={(e) => {
+                              if (e.currentTarget.src !== item.mediaUrl && item.mediaUrl) {
+                                e.currentTarget.src = item.mediaUrl;
+                              }
+                            }}
                           />
-                        ) : (
+                        )}
+                        
+                        {item.mediaType !== 'video' && !item.thumbnailUrl && !item.mediaUrl && (
                           <div className="w-full h-full flex items-center justify-center bg-neutral-300 dark:bg-neutral-700">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
