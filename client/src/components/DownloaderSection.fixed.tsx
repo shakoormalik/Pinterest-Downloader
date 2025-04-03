@@ -10,22 +10,7 @@ import { Clipboard, Download, Link, Share2, History, CheckCircle2 } from 'lucide
 import { useQuery } from '@tanstack/react-query';
 import { createConfetti } from '../utils/confetti';
 
-interface PinterestMedia {
-  id: number;
-  url: string;
-  mediaType: 'video' | 'image';
-  quality: string;
-  mediaUrl: string;
-  thumbnailUrl?: string;
-  downloadedAt: string;
-  metadata?: {
-    title?: string;
-    size?: number;
-    width?: number;
-    height?: number;
-    duration?: number;
-  };
-}
+import { PinterestMedia } from "@/types/pinterest";
 
 interface DownloaderSectionProps {
   onDownloadSuccess: (media: PinterestMedia) => void;

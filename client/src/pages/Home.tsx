@@ -3,7 +3,7 @@ import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import DownloaderSection from "@/components/DownloaderSection";
 import ErrorModal from "@/components/ErrorModal";
-import { PinterestMedia } from "@shared/schema";
+import { PinterestMedia } from "@/types/pinterest";
 
 // Lazy-loaded components for performance optimization
 const LazyFeaturesSection = lazy(() => import("@/components/FeaturesSection"));

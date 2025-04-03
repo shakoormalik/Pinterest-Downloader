@@ -9,23 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { validatePinterestUrl } from "@/utils/validation";
 
-// Define PinterestMedia type directly to avoid import issues
-interface PinterestMedia {
-  id: number;
-  url: string;
-  mediaType: 'video' | 'image';
-  quality: string;
-  mediaUrl: string;
-  thumbnailUrl?: string;
-  downloadedAt: string;
-  metadata?: {
-    title?: string;
-    size?: number;
-    width?: number;
-    height?: number;
-    duration?: number;
-  };
-}
+import { PinterestMedia } from "@/types/pinterest";
 import useLocalStorage from "@/hooks/useLocalStorage";
 
 interface DownloaderSectionProps {

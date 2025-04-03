@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
-import { PinterestMedia } from "@shared/schema";
+import { PinterestMedia } from "@/types/pinterest";
 import { validatePinterestUrl } from "@/utils/validation";
 import { useToast } from "@/hooks/use-toast";
 
@@ -55,17 +55,22 @@ export default function useDownloader(): UseDownloaderReturn {
 
   const downloadMedia = async (media: PinterestMedia): Promise<void> => {
     try {
-      const response = await fetch(`/api/media/download/${media.id}`);
-      const data = await response.json();
-      
-      if (data.downloadUrl) {
-        window.open(data.downloadUrl, '_blank');
+      if (media.mediaUrl) {
+        // Create an anchor element to trigger download
+        const link = document.createElement('a');
+        link.href = media.mediaUrl;
+        link.download = `pinterest-media-${media.id}${media.mediaType === 'video' ? '.mp4' : '.jpg'}`;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
         toast({
           title: "Download started",
           description: "Your download has started",
         });
       } else {
-        throw new Error("Download URL not found");
+        throw new Error("Media URL not found");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to download media";

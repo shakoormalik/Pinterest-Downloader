@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Download } from "lucide-react";
-import { PinterestMedia } from "@shared/schema";
+import { PinterestMedia } from "@/types/pinterest";
 import { useEffect } from "react";
 import { createConfetti } from "@/utils/confetti";
 
