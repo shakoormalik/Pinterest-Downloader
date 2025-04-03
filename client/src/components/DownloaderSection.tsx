@@ -25,8 +25,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
   const [showPreview, setShowPreview] = useState(false);
   const [currentMedia, setCurrentMedia] = useState<PinterestMedia | null>(null);
   const [recentHistory, setRecentHistory] = useLocalStorage<PinterestMedia[]>("pinterest-history", []);
-  const [showThumbnail, setShowThumbnail] = useState(false);
-  const [thumbnailUrl, setThumbnailUrl] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -336,14 +335,13 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                 <Button
                   type="button"
                   variant="default"
-                  disabled={thumbnailUrl === '' && showThumbnail}
+                  disabled={isSearching}
                   className="rounded-l-none rounded-r-lg bg-neutral-900 hover:bg-black text-white dark:bg-neutral-800 dark:hover:bg-neutral-700 px-4 py-3 flex items-center"
                   onClick={async () => {
                     if (url && validatePinterestUrl(url)) {
                       try {
                         // Set loading state first
-                        setShowThumbnail(true);
-                        setThumbnailUrl(''); // Clear previous thumbnail
+                        setIsSearching(true);
                         
                         // Process URL to get the actual media
                         const response = await apiRequest('POST', '/api/media/process', {
@@ -357,20 +355,6 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         setCurrentMedia(mediaData);
                         setShowPreview(true);
                         console.log("Media data from server:", mediaData);
-                        
-                        // Make sure we have a valid thumbnail URL
-                        if (mediaData.thumbnailUrl) {
-                          setThumbnailUrl(mediaData.thumbnailUrl);
-                          console.log("Using thumbnail URL:", mediaData.thumbnailUrl);
-                        } else if (mediaData.mediaUrl) {
-                          // If no thumbnail, use the media URL for images
-                          const fallbackUrl = mediaData.mediaType === 'image' ? mediaData.mediaUrl : '';
-                          setThumbnailUrl(fallbackUrl);
-                          console.log("Using fallback thumbnail URL:", fallbackUrl);
-                        } else {
-                          setThumbnailUrl('');
-                          console.log("No thumbnail URL available");
-                        }
                         
                         // Scroll to the preview section
                         setTimeout(() => {
@@ -390,7 +374,6 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         });
                       } catch (error: any) {
                         console.error("Error fetching preview:", error);
-                        setShowThumbnail(false);
                         
                         toast({
                           title: "Failed to fetch preview",
@@ -399,6 +382,8 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         });
                         
                         onDownloadError("Failed to fetch preview", "Please check the URL and try again.");
+                      } finally {
+                        setIsSearching(false);
                       }
                     } else {
                       toast({
@@ -410,7 +395,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                   }}
                   title="Search and get preview"
                 >
-                  {thumbnailUrl === '' && showThumbnail ? (
+                  {isSearching ? (
                     <>
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -431,63 +416,18 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                 </Button>
               </div>
               
-              {/* Thumbnail preview indicator - only shows after search is clicked */}
-              {showThumbnail && (
+              {/* Loading indicator - only shows when actively searching */}
+              {isSearching && (
                 <div className="mt-3">
-                  <div className="rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-700 w-1/3 mx-auto aspect-square flex items-center justify-center">
-                    {currentMedia ? (
-                      // When we have a media object, first try to use its thumbnailUrl
-                      <img 
-                        key={`media-${currentMedia.id}-${Date.now()}`} // Force re-render with unique key
-                        src={getProxiedImageUrl(currentMedia.thumbnailUrl || currentMedia.mediaUrl)}
-                        alt="Pinterest content" 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          console.log("Image error, trying fallback");
-                          // If thumbnailUrl fails, try mediaUrl as fallback
-                          const target = e.target as HTMLImageElement;
-                          const currentSrc = target.src;
-                          
-                          // Try mediaUrl if it exists and is different
-                          if (currentMedia.mediaUrl && currentSrc !== currentMedia.mediaUrl) {
-                            console.log("Using mediaUrl fallback:", currentMedia.mediaUrl);
-                            target.src = getProxiedImageUrl(currentMedia.mediaUrl);
-                          } else {
-                            console.log("All image sources failed");
-                            // If all else fails, show an error state
-                            target.style.display = 'none';
-                            target.parentElement?.classList.add('image-error');
-                          }
-                        }}
-                      />
-                    ) : thumbnailUrl ? (
-                      // Fall back to the thumbnailUrl state value if we have it
-                      <img 
-                        key={`thumbnail-${Date.now()}`}
-                        src={getProxiedImageUrl(thumbnailUrl)}
-                        alt="Pinterest content" 
-                        className="w-full h-full object-cover"
-                        onError={() => {
-                          console.log("Thumbnail URL failed to load");
-                        }}
-                      />
-                    ) : (
-                      // Show loading spinner if we're still processing
-                      <div className="text-center p-4">
-                        <div className="inline-block animate-pulse w-12 h-12 text-primary">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                      </div>
-                    )}
+                  <div className="text-xs text-center text-neutral-500">
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Searching for Pinterest content...
+                    </span>
                   </div>
-                  {/* Search status - only show when no media found */}
-                  {!currentMedia && (
-                    <div className="text-xs text-center text-neutral-500 mt-1">
-                      <span>Searching for content...</span>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
