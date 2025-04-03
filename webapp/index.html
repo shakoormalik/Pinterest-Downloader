@@ -357,17 +357,17 @@
     </div>
     
     <section id="result-container" class="result-container">
-      <div class="format-tabs" id="format-tabs">
-        <button class="format-tab active" data-format="image">Image</button>
-        <button class="format-tab" data-format="video">Video</button>
-      </div>
-      
+      <!-- Preview section moved to the top for better user experience -->
       <div class="preview-section">
         <div id="preview-container" class="preview-container">
           <img id="preview-image" class="preview-image" alt="Pinterest content">
           <video id="preview-video" class="preview-video" controls style="display: none;"></video>
         </div>
-        <div id="media-id" style="text-align: center; font-size: 12px; color: #777;"></div>
+      </div>
+      
+      <div class="format-tabs" id="format-tabs">
+        <button class="format-tab active" data-format="image">Image</button>
+        <button class="format-tab" data-format="video">Video</button>
       </div>
       
       <div class="format-options" id="image-formats">
@@ -422,7 +422,6 @@
     const previewImage = document.getElementById('preview-image');
     const previewVideo = document.getElementById('preview-video');
     const downloadBtn = document.getElementById('download-btn');
-    const mediaIdDisplay = document.getElementById('media-id');
     
     // CORS proxies to try
     const corsProxies = [
@@ -536,7 +535,6 @@
         
         // Show result container
         resultContainer.style.display = 'block';
-        mediaIdDisplay.textContent = `Media ID: ${pinId}`;
         
         // Set default format based on media type
         setActiveFormat(mediaData.type);
