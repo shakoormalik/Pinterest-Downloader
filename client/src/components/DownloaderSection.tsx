@@ -31,22 +31,22 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Effect for URL changes to show thumbnail preview
+  // We've removed the automatic URL validation effect
+  // Now thumbnail will only be shown when the search button is clicked
+  
+  // Effect to update tab based on detected media type
   useEffect(() => {
-    if (url && validatePinterestUrl(url)) {
-      // For now, just show a loading indicator
-      // The actual Pinterest image will be fetched when the user clicks download
-      setShowThumbnail(true);
-      
-      // Extract pin ID for potential future use
-      const pinId = extractPinId(url);
-      if (!pinId) {
-        setShowThumbnail(false);
+    if (currentMedia) {
+      // Set the tab based on detected media type
+      if (currentMedia.mediaType === 'video') {
+        setActiveTab('video');
+        setSelectedFormat('hd_video');
+      } else {
+        setActiveTab('image');
+        setSelectedFormat(currentMedia.quality === 'hd' ? 'hd_image' : 'standard_image');
       }
-    } else {
-      setShowThumbnail(false);
     }
-  }, [url]);
+  }, [currentMedia]);
 
   // Fetch history from server
   const { data: serverHistory, isLoading: isHistoryLoading } = useQuery({
@@ -350,7 +350,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                 </Button>
               </div>
               
-              {/* Thumbnail preview indicator after URL paste */}
+              {/* Thumbnail preview indicator - only shows after search is clicked */}
               {showThumbnail && (
                 <div className="mt-3">
                   <div className="rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-700 w-1/3 mx-auto aspect-square flex items-center justify-center">
@@ -367,11 +367,9 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         </div>
-
                       </div>
                     )}
                   </div>
-
                 </div>
               )}
             </div>
