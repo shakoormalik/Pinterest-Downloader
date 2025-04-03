@@ -465,6 +465,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // API prefix
   const apiPrefix = "/api";
   
+  // Proxy for Pinterest images to bypass CORS and referrer restrictions
+  app.get(`${apiPrefix}/proxy/image`, async (req: Request, res: Response) => {
+    try {
+      const imageUrl = req.query.url as string;
+      
+      if (!imageUrl) {
+        return res.status(400).json({ message: "Image URL is required" });
+      }
+      
+      if (!imageUrl.includes('pinimg.com') && !imageUrl.includes('pinterest')) {
+        return res.status(400).json({ message: "Only Pinterest images are allowed" });
+      }
+      
+      console.log(`Proxying image: ${imageUrl}`);
+      
+      const response = await axios({
+        url: imageUrl,
+        method: 'GET',
+        responseType: 'stream',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36',
+          'Referer': 'https://www.pinterest.com/',
+          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9'
+        }
+      });
+      
+      // Forward content type
+      if (response.headers['content-type']) {
+        res.setHeader('Content-Type', response.headers['content-type']);
+      } else {
+        res.setHeader('Content-Type', 'image/jpeg');
+      }
+      
+      // Set caching headers
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+      
+      // Stream the image data
+      response.data.pipe(res);
+      
+    } catch (error: any) {
+      console.error('Image proxy error:', error.message);
+      res.status(500).json({ message: 'Failed to proxy image' });
+    }
+  });
+  
   // Get media history
   app.get(`${apiPrefix}/media/history`, async (req: Request, res: Response) => {
     try {

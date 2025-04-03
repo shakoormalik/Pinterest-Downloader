@@ -246,6 +246,18 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
     });
   };
 
+  // Function to get proxied Pinterest image URL to bypass the CORS and referrer issues
+  const getProxiedImageUrl = (url: string | null | undefined): string => {
+    if (!url) return '';
+    
+    // Only proxy Pinterest images
+    if (url.includes('pinimg.com') || url.includes('pinterest')) {
+      return `/api/proxy/image?url=${encodeURIComponent(url)}`;
+    }
+    
+    return url;
+  };
+
   // Format file size for display
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B';
@@ -417,7 +429,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       // When we have a media object, first try to use its thumbnailUrl
                       <img 
                         key={`media-${currentMedia.id}-${Date.now()}`} // Force re-render with unique key
-                        src={currentMedia.thumbnailUrl || currentMedia.mediaUrl}
+                        src={getProxiedImageUrl(currentMedia.thumbnailUrl || currentMedia.mediaUrl)}
                         alt={currentMedia.metadata?.title || "Pinterest content"} 
                         className="w-full h-full object-cover"
                         onError={(e) => {
@@ -429,7 +441,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                           // Try mediaUrl if it exists and is different
                           if (currentMedia.mediaUrl && currentSrc !== currentMedia.mediaUrl) {
                             console.log("Using mediaUrl fallback:", currentMedia.mediaUrl);
-                            target.src = currentMedia.mediaUrl;
+                            target.src = getProxiedImageUrl(currentMedia.mediaUrl);
                           } else {
                             console.log("All image sources failed");
                             // If all else fails, show an error state
@@ -442,7 +454,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       // Fall back to the thumbnailUrl state value if we have it
                       <img 
                         key={`thumbnail-${Date.now()}`}
-                        src={thumbnailUrl}
+                        src={getProxiedImageUrl(thumbnailUrl)}
                         alt="Pinterest content" 
                         className="w-full h-full object-cover"
                         onError={() => {
@@ -619,7 +631,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       ) : (
                         <img 
                           key={`preview-${currentMedia.id}-${Date.now()}`} // Force re-render with unique key
-                          src={currentMedia.thumbnailUrl || currentMedia.mediaUrl || ""} 
+                          src={getProxiedImageUrl(currentMedia.thumbnailUrl || currentMedia.mediaUrl)} 
                           alt="Content preview" 
                           className="w-full h-full object-cover"
                           onError={(e) => {
@@ -631,7 +643,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                             // Try mediaUrl if it exists and is different
                             if (currentMedia.mediaUrl && currentSrc !== currentMedia.mediaUrl) {
                               console.log("Using mediaUrl fallback for preview:", currentMedia.mediaUrl);
-                              target.src = currentMedia.mediaUrl;
+                              target.src = getProxiedImageUrl(currentMedia.mediaUrl);
                             } else {
                               console.log("All preview image sources failed");
                               target.style.display = 'none';
@@ -743,7 +755,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                           <div className="relative w-full h-full">
                             <img 
                               key={`history-video-${item.id}-${Date.now()}`}
-                              src={item.thumbnailUrl || item.mediaUrl || ""}
+                              src={getProxiedImageUrl(item.thumbnailUrl || item.mediaUrl)}
                               alt="Video thumbnail" 
                               className="w-full h-full object-cover"
                               onError={(e) => {
@@ -753,7 +765,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                                 
                                 if (currentSrc !== item.mediaUrl && item.mediaUrl) {
                                   console.log("Using mediaUrl fallback for history video:", item.mediaUrl);
-                                  target.src = item.mediaUrl;
+                                  target.src = getProxiedImageUrl(item.mediaUrl);
                                 } else {
                                   target.style.display = 'none';
                                   target.parentElement?.classList.add('image-error');
@@ -773,7 +785,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         {item.mediaType !== 'video' && (item.thumbnailUrl || item.mediaUrl) && (
                           <img 
                             key={`history-image-${item.id}-${Date.now()}`}
-                            src={item.thumbnailUrl || item.mediaUrl || ""}
+                            src={getProxiedImageUrl(item.thumbnailUrl || item.mediaUrl)}
                             alt="Pinterest content" 
                             className="w-full h-full object-cover"
                             onError={(e) => {
@@ -783,7 +795,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                               
                               if (currentSrc !== item.mediaUrl && item.mediaUrl) {
                                 console.log("Using mediaUrl fallback for history image:", item.mediaUrl);
-                                target.src = item.mediaUrl;
+                                target.src = getProxiedImageUrl(item.mediaUrl);
                               } else {
                                 target.style.display = 'none';
                                 target.parentElement?.classList.add('image-error');
