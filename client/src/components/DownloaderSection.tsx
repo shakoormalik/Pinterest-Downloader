@@ -20,6 +20,7 @@ type FormatOption = 'hd_video' | 'hd_image' | 'standard_image';
 
 export default function DownloaderSection({ onDownloadSuccess, onDownloadError }: DownloaderSectionProps) {
   const [url, setUrl] = useState('');
+  const [activeTab, setActiveTab] = useState<'video' | 'image'>('video');
   const [selectedFormat, setSelectedFormat] = useState<FormatOption>('hd_video');
   const [showPreview, setShowPreview] = useState(false);
   const [currentMedia, setCurrentMedia] = useState<PinterestMedia | null>(null);
@@ -313,49 +314,98 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
 
             <div>
               <label className="block text-sm font-medium text-neutral-500 dark:text-neutral-300 mb-2">Select Format</label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div 
-                  className={`border ${selectedFormat === 'hd_video' ? 'border-primary' : 'border-neutral-300 dark:border-neutral-600'} rounded-lg p-4 cursor-pointer hover:border-primary dark:hover:border-primary transition duration-200`}
-                  onClick={() => setSelectedFormat('hd_video')}
+              
+              {/* Tab selector */}
+              <div className="grid grid-cols-2 mb-4">
+                <button
+                  className={`px-4 py-3 font-medium text-sm border ${activeTab === 'video' 
+                    ? 'text-white bg-primary border-primary rounded-tl-md' 
+                    : 'text-neutral-500 bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300 border-neutral-300 dark:border-neutral-600 rounded-tl-md'}`}
+                  onClick={() => {
+                    setActiveTab('video');
+                    setSelectedFormat('hd_video');
+                  }}
                 >
-                  <div className="flex items-center">
-                    <div className={`w-5 h-5 rounded-full border-2 ${selectedFormat === 'hd_video' ? 'border-primary' : 'border-neutral-300 dark:border-neutral-500'} flex items-center justify-center`}>
-                      <div className={`w-3 h-3 rounded-full ${selectedFormat === 'hd_video' ? 'bg-primary' : ''}`}></div>
-                    </div>
-                    <div className="ml-3">
-                      <p className="font-medium text-secondary dark:text-dark-text">HD Video</p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400">Highest quality</p>
+                  Video
+                </button>
+                <button
+                  className={`px-4 py-3 font-medium text-sm border ${activeTab === 'image' 
+                    ? 'text-white bg-primary border-primary rounded-tr-md' 
+                    : 'text-neutral-500 bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300 border-neutral-300 dark:border-neutral-600 rounded-tr-md'}`}
+                  onClick={() => {
+                    setActiveTab('image');
+                    setSelectedFormat('hd_image');
+                  }}
+                >
+                  Image
+                </button>
+              </div>
+              
+              {/* Format content panel with conditional rendering based on active tab */}
+              <div className="border border-neutral-200 dark:border-neutral-700 rounded-b-lg p-5">
+                {/* Video format options */}
+                {activeTab === 'video' && (
+                  <div>
+                    <div 
+                      className={`${selectedFormat === 'hd_video' 
+                        ? 'bg-primary/10 border-primary' 
+                        : 'bg-white dark:bg-dark-bg border-neutral-300 dark:border-neutral-600'} 
+                        border rounded-lg p-4 cursor-pointer hover:border-primary transition duration-200`}
+                      onClick={() => setSelectedFormat('hd_video')}
+                    >
+                      <div className="flex items-center">
+                        <div className={`w-5 h-5 rounded-full border-2 ${selectedFormat === 'hd_video' ? 'border-primary' : 'border-neutral-300 dark:border-neutral-500'} flex items-center justify-center`}>
+                          <div className={`w-3 h-3 rounded-full ${selectedFormat === 'hd_video' ? 'bg-primary' : ''}`}></div>
+                        </div>
+                        <div className="ml-3">
+                          <p className="font-medium text-secondary dark:text-dark-text">HD Video</p>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400">Best quality (MP4)</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div 
-                  className={`border ${selectedFormat === 'hd_image' ? 'border-primary' : 'border-neutral-300 dark:border-neutral-600'} rounded-lg p-4 cursor-pointer hover:border-primary dark:hover:border-primary transition duration-200`}
-                  onClick={() => setSelectedFormat('hd_image')}
-                >
-                  <div className="flex items-center">
-                    <div className={`w-5 h-5 rounded-full border-2 ${selectedFormat === 'hd_image' ? 'border-primary' : 'border-neutral-300 dark:border-neutral-500'} flex items-center justify-center`}>
-                      <div className={`w-3 h-3 rounded-full ${selectedFormat === 'hd_image' ? 'bg-primary' : ''}`}></div>
+                )}
+                
+                {/* Image format options */}
+                {activeTab === 'image' && (
+                  <div className="space-y-4">
+                    <div 
+                      className={`${selectedFormat === 'hd_image' 
+                        ? 'bg-primary/10 border-primary' 
+                        : 'bg-white dark:bg-dark-bg border-neutral-300 dark:border-neutral-600'} 
+                        border rounded-lg p-4 cursor-pointer hover:border-primary transition duration-200`}
+                      onClick={() => setSelectedFormat('hd_image')}
+                    >
+                      <div className="flex items-center">
+                        <div className={`w-5 h-5 rounded-full border-2 ${selectedFormat === 'hd_image' ? 'border-primary' : 'border-neutral-300 dark:border-neutral-500'} flex items-center justify-center`}>
+                          <div className={`w-3 h-3 rounded-full ${selectedFormat === 'hd_image' ? 'bg-primary' : ''}`}></div>
+                        </div>
+                        <div className="ml-3">
+                          <p className="font-medium text-secondary dark:text-dark-text">HD Image</p>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400">Best resolution (JPG)</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="ml-3">
-                      <p className="font-medium text-secondary dark:text-dark-text">HD Image</p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400">Best resolution</p>
+                    
+                    <div 
+                      className={`${selectedFormat === 'standard_image' 
+                        ? 'bg-primary/10 border-primary' 
+                        : 'bg-white dark:bg-dark-bg border-neutral-300 dark:border-neutral-600'} 
+                        border rounded-lg p-4 cursor-pointer hover:border-primary transition duration-200`}
+                      onClick={() => setSelectedFormat('standard_image')}
+                    >
+                      <div className="flex items-center">
+                        <div className={`w-5 h-5 rounded-full border-2 ${selectedFormat === 'standard_image' ? 'border-primary' : 'border-neutral-300 dark:border-neutral-500'} flex items-center justify-center`}>
+                          <div className={`w-3 h-3 rounded-full ${selectedFormat === 'standard_image' ? 'bg-primary' : ''}`}></div>
+                        </div>
+                        <div className="ml-3">
+                          <p className="font-medium text-secondary dark:text-dark-text">Standard Image</p>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400">Faster download (JPG)</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div 
-                  className={`border ${selectedFormat === 'standard_image' ? 'border-primary' : 'border-neutral-300 dark:border-neutral-600'} rounded-lg p-4 cursor-pointer hover:border-primary dark:hover:border-primary transition duration-200`}
-                  onClick={() => setSelectedFormat('standard_image')}
-                >
-                  <div className="flex items-center">
-                    <div className={`w-5 h-5 rounded-full border-2 ${selectedFormat === 'standard_image' ? 'border-primary' : 'border-neutral-300 dark:border-neutral-500'} flex items-center justify-center`}>
-                      <div className={`w-3 h-3 rounded-full ${selectedFormat === 'standard_image' ? 'bg-primary' : ''}`}></div>
-                    </div>
-                    <div className="ml-3">
-                      <p className="font-medium text-secondary dark:text-dark-text">Standard Image</p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400">Faster download</p>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
