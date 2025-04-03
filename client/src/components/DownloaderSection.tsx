@@ -407,10 +407,23 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
               {showThumbnail && (
                 <div className="mt-3">
                   <div className="rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-700 w-1/3 mx-auto aspect-square flex items-center justify-center">
-                    {thumbnailUrl ? (
+                    {currentMedia && (currentMedia.thumbnailUrl || currentMedia.mediaUrl) ? (
+                      <img 
+                        src={currentMedia.thumbnailUrl || currentMedia.mediaUrl}
+                        alt={currentMedia.metadata?.title || "Pinterest content"} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // If thumbnail fails, try mediaUrl as fallback
+                          const target = e.target as HTMLImageElement;
+                          if (target.src !== currentMedia.mediaUrl && currentMedia.mediaUrl) {
+                            target.src = currentMedia.mediaUrl;
+                          }
+                        }}
+                      />
+                    ) : thumbnailUrl ? (
                       <img 
                         src={thumbnailUrl}
-                        alt="Content thumbnail" 
+                        alt="Pinterest content" 
                         className="w-full h-full object-cover"
                       />
                     ) : (

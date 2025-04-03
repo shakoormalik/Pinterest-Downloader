@@ -45,7 +45,8 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
         'Cache-Control': 'max-age=0',
-        'Connection': 'keep-alive'
+        'Connection': 'keep-alive',
+        'Referer': 'https://www.pinterest.com/'
       },
       timeout: 10000 // 10 second timeout
     });
@@ -267,6 +268,23 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
     if (!mediaUrl) {
       console.log('Could not extract media from Pinterest URL');
       throw new Error('Could not extract media from Pinterest URL. The content may be private or requires login.');
+    }
+    
+    // Make sure we have a thumbnail URL - critical for display in UI
+    if (!thumbnailUrl) {
+      console.log('No thumbnail URL found, using mediaUrl as thumbnail');
+      thumbnailUrl = mediaUrl;
+    }
+    
+    // Check if mediaUrl is a direct image URL (ends with image extension)
+    if (mediaType === 'image' && !mediaUrl.match(/\.(jpe?g|png|gif|webp)$/i)) {
+      // If it's not a direct image URL, try to infer it might be a Pinterest CDN URL
+      if (mediaUrl.includes('pinimg.com')) {
+        // Convert to direct image URL with jpg extension if possible
+        if (!mediaUrl.endsWith('/')) {
+          mediaUrl = mediaUrl + '.jpg';
+        }
+      }
     }
     
     // Attempt to get actual dimensions from meta tags
