@@ -5,6 +5,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { pinterestUrlSchema, PinterestUrlInput, insertPinterestMediaSchema } from "@shared/schema";
 import { z } from "zod";
+import path from "path";
 import { ZodError } from "zod-validation-error";
 
 // Helper function to extract actual Pinterest data
@@ -464,6 +465,11 @@ async function processPinterestUrl(input: PinterestUrlInput) {
 export async function registerRoutes(app: Express): Promise<Server> {
   // API prefix
   const apiPrefix = "/api";
+  
+  // Serve the standalone Pinterest Downloader app
+  app.get('/downloader', (req: Request, res: Response) => {
+    res.sendFile(path.join(process.cwd(), 'webapp', 'index.html'));
+  });
   
   // Proxy endpoint for Pinterest images - uses SVG placeholders to avoid CORS/referrer issues
   app.get(`${apiPrefix}/proxy/image`, (req: Request, res: Response) => {

@@ -1,0 +1,20 @@
+{
+  "name": "pinterest-downloader",
+  "version": "1.0.0",
+  "description": "A pure frontend Pinterest media downloader",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "pinterest",
+    "downloader",
+    "image",
+    "video"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
