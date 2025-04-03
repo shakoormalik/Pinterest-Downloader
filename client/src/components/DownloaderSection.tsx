@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+
 import { Download, Clipboard, Link, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PinterestMedia } from "@shared/schema";
-import { validatePinterestUrl, extractPinId } from "@/utils/validation";
+import { validatePinterestUrl } from "@/utils/validation";
 import useLocalStorage from "@/hooks/useLocalStorage";
 
 interface DownloaderSectionProps {
@@ -258,14 +258,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
     return url;
   };
 
-  // Format file size for display
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
-
-  // Format time ago for display
+  // Format time for display
   const formatTimeAgo = (date: Date) => {
     const now = new Date();
     const diffMs = now.getTime() - new Date(date).getTime();
@@ -430,7 +423,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       <img 
                         key={`media-${currentMedia.id}-${Date.now()}`} // Force re-render with unique key
                         src={getProxiedImageUrl(currentMedia.thumbnailUrl || currentMedia.mediaUrl)}
-                        alt={currentMedia.metadata?.title || "Pinterest content"} 
+                        alt="Pinterest content" 
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           console.log("Image error, trying fallback");
@@ -632,7 +625,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         <img 
                           key={`preview-${currentMedia.id}-${Date.now()}`} // Force re-render with unique key
                           src={getProxiedImageUrl(currentMedia.thumbnailUrl || currentMedia.mediaUrl)} 
-                          alt="Content preview" 
+                          alt="Pinterest content" 
                           className="w-full h-full object-cover"
                           onError={(e) => {
                             console.log("Preview image error, trying fallback");
@@ -657,40 +650,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                   
                   <div className="w-full md:w-2/3 md:pl-6">
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-neutral-500 dark:text-neutral-400">File type</span>
-                        <span className="text-sm font-medium text-secondary dark:text-dark-text">
-                          {currentMedia.mediaType === 'video' ? 'Video MP4' : currentMedia.quality === 'hd' ? 'HD Image JPG' : 'Standard Image JPG'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-neutral-500 dark:text-neutral-400">Size</span>
-                        <span className="text-sm font-medium text-secondary dark:text-dark-text">
-                          {currentMedia.metadata?.size ? formatFileSize(currentMedia.metadata.size) : 'Unknown'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-neutral-500 dark:text-neutral-400">Resolution</span>
-                        <span className="text-sm font-medium text-secondary dark:text-dark-text">
-                          {currentMedia.metadata?.width && currentMedia.metadata?.height 
-                            ? `${currentMedia.metadata.width} x ${currentMedia.metadata.height}`
-                            : 'Unknown'
-                          }
-                        </span>
-                      </div>
-                      {currentMedia.mediaType === 'video' && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-neutral-500 dark:text-neutral-400">Duration</span>
-                          <span className="text-sm font-medium text-secondary dark:text-dark-text">
-                            {currentMedia.metadata?.duration 
-                              ? `00:${currentMedia.metadata.duration < 10 ? '0' + currentMedia.metadata.duration : currentMedia.metadata.duration}`
-                              : '00:00'
-                            }
-                          </span>
-                        </div>
-                      )}
-                      
-                      <div className="pt-4 flex space-x-3">
+                      <div className="pt-2 flex space-x-3">
                         <Button 
                           className="flex-1 py-2 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition duration-200 flex items-center justify-center"
                           onClick={() => downloadMedia(currentMedia)}
@@ -756,7 +716,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                             <img 
                               key={`history-video-${item.id}-${Date.now()}`}
                               src={getProxiedImageUrl(item.thumbnailUrl || item.mediaUrl)}
-                              alt="Video thumbnail" 
+                              alt="Pinterest content" 
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 console.log("History video thumbnail error, trying fallback");
@@ -815,7 +775,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       <div className="ml-4 flex-grow">
                         <div className="flex justify-between">
                           <p className="font-medium text-secondary dark:text-dark-text truncate">
-                            {item.metadata?.title || 'Pinterest content'}
+                            Pinterest content
                           </p>
                           <span className="text-xs text-neutral-500 dark:text-neutral-400">
                             {formatTimeAgo(new Date(item.downloadedAt))}
@@ -824,10 +784,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">{item.url}</p>
                         <div className="flex space-x-2 mt-1">
                           <span className="text-xs bg-neutral-200 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 px-2 py-0.5 rounded">
-                            {item.quality === 'hd' ? 'HD' : 'Standard'} {item.mediaType === 'video' ? 'Video' : 'Image'}
-                          </span>
-                          <span className="text-xs bg-neutral-200 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 px-2 py-0.5 rounded">
-                            {item.metadata?.size ? formatFileSize(item.metadata.size) : 'Unknown size'}
+                            {item.mediaType === 'video' ? 'Video' : 'Image'}
                           </span>
                         </div>
                       </div>
