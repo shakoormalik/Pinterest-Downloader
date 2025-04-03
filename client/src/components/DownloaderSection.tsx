@@ -466,6 +466,30 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                 {/* Video format options */}
                 {activeTab === 'video' && (
                   <div>
+                    {/* Show preview of the video if we have currentMedia */}
+                    {currentMedia && currentMedia.mediaType === 'video' && (
+                      <div className="mb-4 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                        <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-2 text-center">Preview:</div>
+                        <div className="flex justify-center">
+                          <div className="w-3/4 rounded-md overflow-hidden bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600">
+                            <video 
+                              src={getProxiedVideoUrl(currentMedia.mediaUrl)}
+                              poster={getProxiedImageUrl(currentMedia.thumbnailUrl)}
+                              controls
+                              className="w-full h-auto object-contain max-h-[150px]"
+                              preload="metadata"
+                              onError={(e) => {
+                                console.log("Format preview video error");
+                                const target = e.target as HTMLVideoElement;
+                                target.style.display = 'none';
+                                target.parentElement?.classList.add('video-error');
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div 
                       className={`${selectedFormat === 'hd_video' 
                         ? 'bg-primary/10 border-primary' 
@@ -489,6 +513,28 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                 {/* Image format options */}
                 {activeTab === 'image' && (
                   <div className="space-y-4">
+                    {/* Show preview of the image if we have currentMedia */}
+                    {currentMedia && currentMedia.mediaType === 'image' && (
+                      <div className="mb-4 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                        <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-2 text-center">Preview:</div>
+                        <div className="flex justify-center">
+                          <div className="w-1/2 rounded-md overflow-hidden bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600">
+                            <img 
+                              src={getProxiedImageUrl(currentMedia.mediaUrl)}
+                              alt="Pinterest image preview" 
+                              className="w-full h-auto object-contain"
+                              onError={(e) => {
+                                console.log("Format preview image error");
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                target.parentElement?.classList.add('image-error');
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div 
                       className={`${selectedFormat === 'hd_image' 
                         ? 'bg-primary/10 border-primary' 
