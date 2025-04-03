@@ -341,8 +341,9 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         
                         const mediaData: PinterestMedia = await response.json();
                         
-                        // Set current media and show the thumbnail
+                        // Set current media and show the preview immediately
                         setCurrentMedia(mediaData);
+                        setShowPreview(true);
                         console.log("Media data from server:", mediaData);
                         
                         // Make sure we have a valid thumbnail URL
@@ -358,7 +359,11 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                           setThumbnailUrl('');
                           console.log("No thumbnail URL available");
                         }
-                        setShowPreview(true);
+                        
+                        // Scroll to the preview section
+                        setTimeout(() => {
+                          document.getElementById('preview-section')?.scrollIntoView({ behavior: 'smooth' });
+                        }, 100);
                         
                         // Add to recent history (local)
                         const updatedHistory = [mediaData, ...recentHistory.slice(0, 4)];
@@ -465,14 +470,12 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       </div>
                     )}
                   </div>
-                  {/* Add debugging output */}
-                  <div className="text-xs text-center text-neutral-500 mt-1">
-                    {currentMedia ? (
-                      <span>Media ID: {currentMedia.id}</span>
-                    ) : (
+                  {/* Search status - only show when no media found */}
+                  {!currentMedia && (
+                    <div className="text-xs text-center text-neutral-500 mt-1">
                       <span>Searching for content...</span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -606,11 +609,13 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
 
           {/* Preview Section */}
           {showPreview && currentMedia && (
-            <div className="mt-8">
+            <div 
+              id="preview-section" 
+              className="mt-8">
               <div className="border-t border-neutral-200 dark:border-neutral-700 pt-6">
                 <h3 className="text-lg font-semibold text-secondary dark:text-dark-text mb-4">Preview</h3>
                 
-                <div className="bg-neutral-100 dark:bg-dark-card rounded-lg p-4 flex flex-col md:flex-row items-center">
+                <div className="bg-neutral-100 dark:bg-dark-card rounded-lg p-4 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col md:flex-row items-center">
                   <div className="w-full md:w-1/3 mb-4 md:mb-0">
                     <div className={`rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-600 ${currentMedia.mediaType === 'video' ? '' : 'aspect-square'}`}>
                       {currentMedia.mediaType === 'video' ? (
