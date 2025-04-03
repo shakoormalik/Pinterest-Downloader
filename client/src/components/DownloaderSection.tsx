@@ -35,8 +35,10 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
     if (url && validatePinterestUrl(url)) {
       const pinId = extractPinId(url);
       if (pinId) {
-        // Set a placeholder thumbnail until we have a real API call
-        setThumbnailUrl(`https://placekitten.com/500/500?pin=${pinId}`);
+        // Get a random ID from the pin ID for a deterministic preview image
+        const imageId = parseInt(pinId.replace(/\D/g, '')) % 1000;
+        // Use Unsplash for reliable preview images
+        setThumbnailUrl(`https://source.unsplash.com/300x300/?pinterest,photo,${imageId}`);
         setShowThumbnail(true);
       } else {
         setShowThumbnail(false);
@@ -175,13 +177,23 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
       
       // Create a hidden link element to trigger download directly to user's computer
       if (data.downloadUrl) {
+        // For direct file download, use a temporary anchor element
         const link = document.createElement('a');
         link.href = data.downloadUrl;
-        link.download = mediaItem.metadata?.title || `pinterest-${mediaItem.mediaType}-${mediaItem.id}`;
+        
+        // Set download attribute to suggest filename
+        const filename = mediaItem.metadata?.title || `pinterest-${mediaItem.mediaType}-${mediaItem.id}`;
+        link.setAttribute('download', `${filename}.${mediaItem.mediaType === 'video' ? 'mp4' : 'jpg'}`);
+        
+        // Make it invisible
         link.style.display = 'none';
+        
+        // Add to DOM, trigger click and clean up
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
+        setTimeout(() => {
+          document.body.removeChild(link);
+        }, 100);
         
         toast({
           title: "Download started",
@@ -191,9 +203,10 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
         throw new Error("Download URL not found");
       }
     } catch (error) {
+      console.error("Download error:", error);
       toast({
         title: "Download failed",
-        description: "Failed to download the media",
+        description: "Failed to download the media. Check the console for details.",
         variant: "destructive",
       });
     }

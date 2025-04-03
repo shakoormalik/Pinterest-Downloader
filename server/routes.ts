@@ -10,7 +10,7 @@ import { ZodError } from "zod-validation-error";
 async function processPinterestUrl(input: PinterestUrlInput) {
   try {
     // In a real implementation, this would properly extract media from Pinterest URLs
-    // using their API or scraping techniques. For this demo, we'll simulate the process
+    // using their API or scraping techniques. For this demo, we'll use static images
     
     // Simulate an API call delay
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -31,16 +31,22 @@ async function processPinterestUrl(input: PinterestUrlInput) {
       quality = "hd";
     }
     
-    // Create a simulated response
+    // Use Unsplash API for sample images (no API key required for these specific URLs)
+    // This is more reliable than placekitten for our demo
+    const imageId = parseInt(pinId.replace(/\D/g, '')) % 1000; // Convert pin ID to a number for deterministic images
+    
+    // Create a simulated response with real images
     const mediaData = {
       url: input.url,
       mediaType,
       quality,
-      thumbnailUrl: `https://placekitten.com/500/500?pin=${pinId}`,
-      mediaUrl: `https://placekitten.com/1200/1200?pin=${pinId}`,
+      thumbnailUrl: `https://source.unsplash.com/200x200/?pinterest,${mediaType === "video" ? "video" : "photo"},${imageId}`,
+      mediaUrl: mediaType === "video" 
+        ? `https://assets.mixkit.co/videos/preview/mixkit-tree-with-yellow-flowers-1173-large.mp4` // Sample video
+        : `https://source.unsplash.com/1200x1200/?pinterest,photo,${imageId}`,
       metadata: {
-        width: 1200,
-        height: 1200,
+        width: mediaType === "video" ? 1920 : 1200,
+        height: mediaType === "video" ? 1080 : 1200,
         duration: mediaType === "video" ? 18 : undefined,
         size: mediaType === "video" ? 12400000 : 2400000, // 12.4MB for video, 2.4MB for image
         title: `Pinterest ${mediaType} ${pinId}`
