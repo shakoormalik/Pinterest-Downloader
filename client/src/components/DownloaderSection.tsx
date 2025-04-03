@@ -302,11 +302,11 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         </div>
-                        <p className="text-xs mt-2 text-neutral-500 dark:text-neutral-400">Content will be fetched when you click Download</p>
+
                       </div>
                     )}
                   </div>
-                  <p className="text-xs text-center mt-2 text-neutral-500 dark:text-neutral-400">Click Download to fetch actual Pinterest content</p>
+
                 </div>
               )}
             </div>
@@ -416,7 +416,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-neutral-500 dark:text-neutral-400">File type</span>
                         <span className="text-sm font-medium text-secondary dark:text-dark-text">
-                          {currentMedia.mediaType === 'video' ? 'Video MP4' : 'Image JPG'}
+                          {currentMedia.mediaType === 'video' ? 'Video MP4' : currentMedia.quality === 'hd' ? 'HD Image JPG' : 'Standard Image JPG'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
