@@ -105,25 +105,41 @@ This is a full-stack application with separate client and server parts, which re
 
 If you see server code or raw files instead of your application:
 
-1. **Incorrect Configuration**: Make sure your `vercel.json` includes:
-   - Proper build configurations for both client and server
-   - Correct routing for the API and frontend paths
+1. **Make sure all required files are present**:
+   - `vercel.json` in root directory with proper configuration
+   - `client/package.json` with all dependencies and build script
+   - `client/vite.config.ts` for Vite configuration
+   - `client/tailwind.config.js` for Tailwind CSS
+   - `client/postcss.config.js` for PostCSS
 
-2. **Missing Client Package.json**: Ensure you have the `client/package.json` file with the build script
+2. **Check the build logs in Vercel dashboard**:
+   - Look for any missing dependencies
+   - Ensure the client build completes successfully
+   - Confirm that all paths in vercel.json are correct
 
-3. **Project Structure**: Verify your project maintains the correct structure:
+3. **Project structure must match exactly**:
    ```
    /
    ├── client/          # Frontend React application
+   │   ├── package.json # Client-specific package.json with dependencies
+   │   ├── vite.config.ts
+   │   ├── tailwind.config.js
+   │   ├── postcss.config.js
+   │   └── src/         # React source files
    ├── server/          # Backend Node.js/Express server
    ├── shared/          # Shared code/types
    ├── vercel.json      # Vercel deployment configuration
    └── package.json     # Main package.json
    ```
 
-4. **Deploy Using CLI**: If GitHub deployment isn't working, try deploying with the Vercel CLI directly
+4. **For persistent issues**:
+   - Try clearing the Vercel cache and redeploying
+   - Use `vercel --prod --force` to force a clean deployment
+   - Consider updating the Node.js version in Vercel project settings
 
-5. **Check Vercel Logs**: Review build logs for any errors by clicking on the deployment in your Vercel dashboard
+5. **Check frontend/backend communication**:
+   - Ensure API calls in the frontend use relative paths (/api/...)
+   - Confirm the API routes in vercel.json match those used in the code
 
 ## Contributing
 

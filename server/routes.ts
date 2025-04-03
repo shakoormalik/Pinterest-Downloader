@@ -17,11 +17,37 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
   try {
     console.log(`Extracting media from Pinterest URL: ${url}`);
     
-    // Fetch the Pinterest page
+    // Check if URL is a Pinterest URL
+    if (!url.includes('pinterest')) {
+      throw new Error('Not a valid Pinterest URL');
+    }
+    
+    // Normalize Pinterest URL - some URLs might be shortened or mobile versions
+    if (url.includes('pin.it/')) {
+      // It's a shortened URL, we need to follow the redirect to get the actual URL
+      const response = await axios.get(url, {
+        maxRedirects: 5,
+        validateStatus: null
+      });
+      url = response.request.res.responseUrl || url;
+      console.log(`Resolved shortened URL to: ${url}`);
+    }
+    
+    // Ensure we're using the web version, not mobile
+    if (url.includes('pinterest.com/pin/') && !url.includes('www.pinterest')) {
+      url = url.replace('pinterest.com', 'www.pinterest.com');
+    }
+    
+    // Fetch the Pinterest page with additional headers to mimic a browser
     const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'max-age=0',
+        'Connection': 'keep-alive'
+      },
+      timeout: 10000 // 10 second timeout
     });
     
     console.log(`Got response from Pinterest, parsing content`);
@@ -33,6 +59,7 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
     
     // Extract metadata
     const title = $('title').text().trim() || 'Pinterest Content';
+    const description = $('meta[name="description"]').attr('content') || '';
     
     // Look for meta tags with image/video information
     const ogImage = $('meta[property="og:image"]').attr('content');
@@ -40,90 +67,195 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
     const ogVideoUrl = $('meta[property="og:video:url"]').attr('content');
     const ogVideoSecureUrl = $('meta[property="og:video:secure_url"]').attr('content');
     const ogType = $('meta[property="og:type"]').attr('content') || '';
+    const pinterestMediaType = $('meta[name="pinterest:media"]').attr('content') || '';
     
-    // Look deeper for video content in script tags (Pinterest often hides video URLs in JSON)
+    // Enhanced technique for finding video in script JSON data
     let scriptVideoUrl = '';
+    let jsonLdData: Record<string, any> | null = null;
+    
     try {
-      // Find scripts with JSON content that might contain video URLs
-      const scriptTags = $('script').filter((i, el) => {
-        const scriptContent = $(el).html() || '';
-        return scriptContent.includes('VideoObject') || 
-               scriptContent.includes('contentUrl') || 
-               scriptContent.includes('.mp4');
+      // First try to find JSON-LD structured data which often contains media info
+      const jsonLdScripts = $('script[type="application/ld+json"]');
+      jsonLdScripts.each((i, el) => {
+        try {
+          const scriptContent = $(el).html() || '';
+          const parsedData = JSON.parse(scriptContent);
+          
+          // Look for video data in JSON-LD
+          if (parsedData && (parsedData.video || parsedData.videoObject)) {
+            const videoData = parsedData.video || parsedData.videoObject;
+            if (videoData && videoData.contentUrl) {
+              scriptVideoUrl = videoData.contentUrl;
+              jsonLdData = parsedData;
+              return false; // break the loop
+            }
+          }
+          
+          // Alternative formats in structured data
+          if (parsedData && parsedData['@graph']) {
+            const graphItems = parsedData['@graph'];
+            for (const item of graphItems) {
+              if (item.video && item.video.contentUrl) {
+                scriptVideoUrl = item.video.contentUrl;
+                jsonLdData = item;
+                return false; // break the loop
+              }
+            }
+          }
+        } catch (err) {
+          // Continue if one JSON parse fails
+        }
       });
       
-      // Extract video URLs from script tags
-      scriptTags.each((i, el) => {
-        const scriptContent = $(el).html() || '';
+      // If we didn't find in JSON-LD, look in other scripts
+      if (!scriptVideoUrl) {
+        // Find scripts with JSON content that might contain video URLs
+        const scriptTags = $('script').filter((i, el) => {
+          const scriptContent = $(el).html() || '';
+          return scriptContent.includes('VideoObject') || 
+                 scriptContent.includes('contentUrl') || 
+                 scriptContent.includes('.mp4') ||
+                 scriptContent.includes('{"resource_response":');
+        });
         
-        // Try to find video URLs
-        const videoUrlMatch = scriptContent.match(/"contentUrl":\s*"([^"]+\.mp4[^"]*)"/);
-        if (videoUrlMatch && videoUrlMatch[1]) {
-          scriptVideoUrl = videoUrlMatch[1].replace(/\\/g, '');
-          return false; // break the loop
-        }
-        
-        // Alternative pattern
-        const videoMatch = scriptContent.match(/"url":\s*"([^"]+\.mp4[^"]*)"/);
-        if (videoMatch && videoMatch[1]) {
-          scriptVideoUrl = videoMatch[1].replace(/\\/g, '');
-          return false; // break the loop
-        }
-      });
+        // Extract video URLs from script tags
+        scriptTags.each((i, el) => {
+          const scriptContent = $(el).html() || '';
+          
+          // Try to find pinterest resource_response data
+          if (scriptContent.includes('{"resource_response":')) {
+            try {
+              // Find any JSON object that might contain resource data
+              const jsonMatches = scriptContent.match(/\{\"resource_response\":.*?\}/g);
+              if (jsonMatches) {
+                for (const match of jsonMatches) {
+                  try {
+                    const data = JSON.parse(match);
+                    if (data.resource_response && data.resource_response.data) {
+                      const resourceData = data.resource_response.data;
+                      
+                      // Look for video object
+                      if (resourceData.videos && resourceData.videos.video_list) {
+                        // Pinterest stores videos in formats like V_720P, V_480P
+                        const videoFormats = resourceData.videos.video_list;
+                        // Use highest quality available
+                        const formatKeys = Object.keys(videoFormats);
+                        if (formatKeys.length > 0) {
+                          // Prioritize V_720P or the highest available
+                          let bestFormat = formatKeys.find(k => k === 'V_720P') || formatKeys[0];
+                          scriptVideoUrl = videoFormats[bestFormat].url;
+                          return false; // break the loop
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    // Continue if one match fails to parse
+                  }
+                }
+              }
+            } catch (e) {
+              // Continue to next pattern if this one fails
+            }
+          }
+          
+          // Try to find video URLs with various patterns
+          const videoUrlPatterns = [
+            /"contentUrl":\s*"([^"]+\.mp4[^"]*)"/,
+            /"url":\s*"([^"]+\.mp4[^"]*)"/,
+            /src="([^"]+\.mp4[^"]*)"/,
+            /"([^"]+\.mp4[^"]*)"/
+          ];
+          
+          for (const pattern of videoUrlPatterns) {
+            const videoUrlMatch = scriptContent.match(pattern);
+            if (videoUrlMatch && videoUrlMatch[1]) {
+              scriptVideoUrl = videoUrlMatch[1].replace(/\\/g, '');
+              return false; // break the loop
+            }
+          }
+        });
+      }
     } catch (err) {
       console.error('Error parsing script tags for video:', err);
     }
     
     console.log(`Meta tags - ogImage: ${ogImage ? 'found' : 'not found'}, ogVideo: ${ogVideo ? 'found' : 'not found'}, scriptVideo: ${scriptVideoUrl ? 'found' : 'not found'}`);
     
-    // Find the main image or video - prioritize video if requested
-    if (mediaType === 'video' && (ogVideo || ogVideoUrl || ogVideoSecureUrl || scriptVideoUrl || ogType.includes('video'))) {
-      // We found a video or strong indicators of video
+    // Determine the actual media type based on what we found and what was requested
+    const isVideoRequested = type === 'hd_video';
+    const isVideoAvailable = Boolean(ogVideo || ogVideoUrl || ogVideoSecureUrl || scriptVideoUrl || 
+                                     pinterestMediaType === 'video' || ogType.includes('video'));
+    
+    // Assign media type and URL based on what's available and what's requested
+    if (isVideoRequested && isVideoAvailable) {
+      // Video is requested and available
+      mediaType = 'video';
       mediaUrl = scriptVideoUrl || ogVideoSecureUrl || ogVideoUrl || ogVideo || '';
       thumbnailUrl = ogImage || '';
       
-      // If we found a video URL, ensure it's marked as a video
-      if (mediaUrl) {
-        mediaType = 'video';
-      } else {
-        // We couldn't find a video URL despite indicators, let's look for video tags
+      if (!mediaUrl) {
+        // Try to find video elements directly if metadata approach failed
         const videoSources = $('video source, video').map((i, el) => {
           return $(el).attr('src') || '';
         }).get().filter(Boolean);
         
         if (videoSources.length > 0) {
           mediaUrl = videoSources[0];
-          mediaType = 'video';
-        } else {
-          // Still no video, fall back to image
-          mediaType = 'image';
         }
       }
+      
+      // If we still couldn't find video, fall back to image
+      if (!mediaUrl) {
+        mediaType = 'image';
+        console.log('Requested video but could not find video URL, falling back to image');
+      }
     } else {
-      // Either it's an image or we couldn't find video, use image
+      // Either image was requested or video wasn't available
       mediaType = 'image';
       
-      // Try different selectors to find high-quality images
+      // Optimize image selectors for higher resolution
       const imageSelectors = [
+        // Original full-size Pinterest images often have 'orig' in the URL
+        'img[src*="orig"]',
+        // Look for og:image which is usually good quality
         'meta[property="og:image"]',
+        // Pinterest specific image tags
         'meta[property="pinterest:pinimage"]',
-        'img[src*="orig"]', // Original Pinterest images often have 'orig' in the URL
-        'img[src*="736x"]', // High-res Pinterest thumbnails
+        // Pinterest high-res thumbnails
+        'img[src*="736x"]',
+        // Pinterest other common sizes
+        'img[src*="564x"]',
+        'img[src*="600x"]',
+        // Other potential image containers
+        '.GrowthUnauthPinImage img',
+        '.PinImage img'
       ];
       
       // Try each selector until we find an image
       for (const selector of imageSelectors) {
         const found = $(selector).first();
         if (found.length) {
-          mediaUrl = found.attr('content') || found.attr('src') || '';
-          if (mediaUrl) break;
+          const foundUrl = found.attr('content') || found.attr('src') || '';
+          if (foundUrl) {
+            // For image URLs, attempt to get the highest quality possible
+            const originalImageUrl = foundUrl.replace(/\/[0-9]+x\//g, '/orig/');
+            mediaUrl = originalImageUrl;
+            break;
+          }
         }
       }
       
       // If we still didn't find an image, try any image on the page
       if (!mediaUrl) {
-        const anyImg = $('img').first();
-        mediaUrl = anyImg.attr('src') || '';
+        const allImages = $('img').toArray()
+          .map(el => $(el).attr('src'))
+          .filter((src): src is string => typeof src === 'string' && src.length > 0)
+          // Sort by size - longer URLs often have more parameters and are higher quality
+          .sort((a, b) => b.length - a.length);
+          
+        if (allImages.length > 0) {
+          mediaUrl = allImages[0];
+        }
       }
       
       thumbnailUrl = mediaUrl;
@@ -131,10 +263,10 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
     
     console.log(`Extracted media URL: ${mediaUrl ? mediaUrl.substring(0, 50) + '...' : 'not found'}`);
     
-    // If still no media found, fall back to a reliable sample
+    // If still no media found, notify the user
     if (!mediaUrl) {
-      console.log('Could not extract media from Pinterest URL, using fallback');
-      throw new Error('Could not extract media from Pinterest URL');
+      console.log('Could not extract media from Pinterest URL');
+      throw new Error('Could not extract media from Pinterest URL. The content may be private or requires login.');
     }
     
     // Attempt to get actual dimensions from meta tags
@@ -147,6 +279,47 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
     if (ogImageWidth) width = parseInt(ogImageWidth);
     if (ogImageHeight) height = parseInt(ogImageHeight);
     if (ogVideoDuration) duration = parseInt(ogVideoDuration);
+    
+    // Try to extract dimensions from JSON-LD data if available
+    if (jsonLdData) {
+      // Parse width and height from JSON-LD if available
+      const typedJsonData = jsonLdData as Record<string, any>;
+      
+      const ldWidth = typedJsonData.width;
+      if (!width && ldWidth && typeof ldWidth === 'number') {
+        width = ldWidth;
+      } else if (!width && ldWidth && typeof ldWidth === 'string') {
+        const parsedWidth = parseInt(ldWidth);
+        if (!isNaN(parsedWidth)) width = parsedWidth;
+      }
+      
+      const ldHeight = typedJsonData.height;
+      if (!height && ldHeight && typeof ldHeight === 'number') {
+        height = ldHeight;
+      } else if (!height && ldHeight && typeof ldHeight === 'string') {
+        const parsedHeight = parseInt(ldHeight);
+        if (!isNaN(parsedHeight)) height = parsedHeight;
+      }
+      
+      // Parse duration from JSON-LD
+      const ldDuration = typedJsonData.duration;
+      if (!duration && ldDuration) {
+        if (typeof ldDuration === 'number') {
+          duration = ldDuration;
+        } else if (typeof ldDuration === 'string') {
+          // Duration could be in ISO8601 format like PT15S for 15 seconds
+          const durationMatch = ldDuration.match(/PT(\d+)S/);
+          if (durationMatch && durationMatch[1]) {
+            const parsedDuration = parseInt(durationMatch[1]);
+            if (!isNaN(parsedDuration)) duration = parsedDuration;
+          } else {
+            // Try direct integer parsing
+            const parsedDuration = parseInt(ldDuration);
+            if (!isNaN(parsedDuration)) duration = parsedDuration;
+          }
+        }
+      }
+    }
     
     // If we couldn't get dimensions from meta tags, try to estimate from URL patterns
     if (!width || !height) {
@@ -219,7 +392,8 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
       height,
       duration: mediaType === 'video' ? (duration || 15) : undefined,
       size,
-      title: title
+      title: title,
+      description: description
     };
     
     return {
@@ -230,7 +404,7 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
     };
   } catch (error) {
     console.error('Error extracting Pinterest media:', error);
-    throw new Error('Failed to extract media from Pinterest URL. Please try a different URL.');
+    throw new Error('Failed to extract media from Pinterest URL. Please try a different URL or check if the content is private.');
   }
 }
 
@@ -338,9 +512,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Media not found" });
       }
       
-      // In a real implementation, we would stream the file
-      // For this demo, we'll redirect to the media URL
-      return res.json({ downloadUrl: media.mediaUrl });
+      // For better file handling, we'll try to download and send the file properly
+      // with appropriate headers
+      try {
+        // Ensure we have a valid media URL
+        if (!media.mediaUrl) {
+          return res.status(400).json({ message: "Invalid media URL" });
+        }
+        
+        // Extract filename from URL or use default
+        const urlObj = new URL(media.mediaUrl);
+        const pathSegments = urlObj.pathname.split('/');
+        let fileName = pathSegments[pathSegments.length - 1];
+        
+        // If we can't get a proper filename from the URL, create one
+        if (!fileName || fileName === '' || !fileName.includes('.')) {
+          const extension = media.mediaType === 'video' ? 'mp4' : 'jpg';
+          const quality = media.quality === 'hd' ? 'HD' : 'Standard';
+          fileName = `pinterest_${id}_${quality}.${extension}`;
+        }
+        
+        // Set content disposition to force download with filename
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        
+        // Attempt to stream the file - this works better for direct file access
+        // But still allow fall back to direct URL
+        try {
+          // Stream through server to handle CORS issues
+          const mediaResponse = await axios({
+            url: media.mediaUrl,
+            method: 'GET',
+            responseType: 'stream',
+            timeout: 15000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36',
+              'Referer': 'https://www.pinterest.com/'
+            }
+          });
+          
+          // Set response headers based on media response
+          const contentType = mediaResponse.headers['content-type'];
+          if (contentType) {
+            res.setHeader('Content-Type', contentType);
+          } else {
+            // Set default content type based on media type
+            res.setHeader('Content-Type', media.mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
+          }
+          
+          const contentLength = mediaResponse.headers['content-length'];
+          if (contentLength) {
+            res.setHeader('Content-Length', contentLength);
+          }
+          
+          // Stream the file to client
+          return mediaResponse.data.pipe(res);
+        } catch (streamError) {
+          console.log("Error streaming file, falling back to direct URL", streamError);
+          return res.json({ 
+            downloadUrl: media.mediaUrl,
+            fileName: fileName
+          });
+        }
+      } catch (fileError) {
+        console.error("Error processing file, returning direct URL", fileError);
+        return res.json({ downloadUrl: media.mediaUrl });
+      }
     } catch (error) {
       console.error("Error downloading media:", error);
       return res.status(500).json({ message: "Failed to download media" });
