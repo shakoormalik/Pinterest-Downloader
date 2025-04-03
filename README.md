@@ -59,41 +59,71 @@ npm run dev
 
 ## Deployment on Vercel
 
-This application can be deployed to Vercel by following these steps:
+This is a full-stack application with separate client and server parts, which requires special configuration for Vercel deployment:
 
-1. Make sure you have the `vercel.json` file in your project root (it should be included already)
+### Method 1: Deploy with Vercel CLI (Recommended)
 
-2. Create a Vercel account if you don't have one
-   - Go to [vercel.com](https://vercel.com) and sign up using GitHub, GitLab, or your email
-
-3. Install Vercel CLI (optional)
+1. Install the Vercel CLI globally:
    ```bash
    npm install -g vercel
    ```
 
-4. Deploy from your repository
-   - Connect your GitHub/GitLab account to Vercel
-   - Import your repository
-   - Set the following deployment settings:
-     - Build Command: `npm run build`
-     - Output Directory: `dist`
-     - Install Command: `npm install`
+2. Make sure your project has the following files (they should be already included):
+   - `vercel.json` in the root directory
+   - `client/package.json` for the frontend build
+   - Main `package.json` for the server
 
-5. Or deploy from your local machine using Vercel CLI
+3. Login to Vercel from the command line:
    ```bash
-   vercel
+   vercel login
    ```
 
-6. After deployment, your app will be available at a URL provided by Vercel
+4. Deploy from the project root:
+   ```bash
+   vercel --prod
+   ```
+   
+5. After deployment, your app will be available at a URL provided by Vercel
 
-### Troubleshooting Vercel Deployment
+### Method 2: Deploy from GitHub Repository
 
-If you see raw HTML or code instead of your app after deployment:
+1. Push all project files to GitHub including:
+   - `vercel.json` 
+   - `client/package.json`
+   - All server and client code
 
-1. Make sure the `vercel.json` file is properly configured (check that it exists in your project root)
-2. Verify that your build script in package.json is correct
-3. Ensure that the "Output Directory" in Vercel project settings is set to `dist`
-4. Check Vercel deployment logs for any errors
+2. Go to [vercel.com](https://vercel.com) and create an account or sign in
+
+3. Click "Add New Project" and select your GitHub repository
+
+4. In the project configuration:
+   - Leave the default settings as they are
+   - Do NOT override the settings in vercel.json
+   - Click "Deploy"
+
+### Fixing Common Deployment Issues
+
+If you see server code or raw files instead of your application:
+
+1. **Incorrect Configuration**: Make sure your `vercel.json` includes:
+   - Proper build configurations for both client and server
+   - Correct routing for the API and frontend paths
+
+2. **Missing Client Package.json**: Ensure you have the `client/package.json` file with the build script
+
+3. **Project Structure**: Verify your project maintains the correct structure:
+   ```
+   /
+   ├── client/          # Frontend React application
+   ├── server/          # Backend Node.js/Express server
+   ├── shared/          # Shared code/types
+   ├── vercel.json      # Vercel deployment configuration
+   └── package.json     # Main package.json
+   ```
+
+4. **Deploy Using CLI**: If GitHub deployment isn't working, try deploying with the Vercel CLI directly
+
+5. **Check Vercel Logs**: Review build logs for any errors by clicking on the deployment in your Vercel dashboard
 
 ## Contributing
 
