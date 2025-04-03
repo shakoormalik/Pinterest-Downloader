@@ -2,55 +2,135 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import axios from "axios";
+import * as cheerio from "cheerio";
 import { pinterestUrlSchema, PinterestUrlInput, insertPinterestMediaSchema } from "@shared/schema";
 import { z } from "zod";
 import { ZodError } from "zod-validation-error";
 
+// Helper function to extract actual Pinterest data
+async function extractPinterestMedia(url: string, type: string): Promise<{
+  thumbnailUrl: string; 
+  mediaUrl: string; 
+  mediaType: string;
+  metadata: any;
+}> {
+  try {
+    console.log(`Extracting media from Pinterest URL: ${url}`);
+    
+    // Fetch the Pinterest page
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    
+    console.log(`Got response from Pinterest, parsing content`);
+    
+    const $ = cheerio.load(response.data);
+    let thumbnailUrl = '';
+    let mediaUrl = '';
+    let mediaType = type.includes('video') ? 'video' : 'image';
+    
+    // Extract metadata
+    const title = $('title').text().trim() || 'Pinterest Content';
+    
+    // Look for meta tags with image/video information
+    const ogImage = $('meta[property="og:image"]').attr('content');
+    const ogVideo = $('meta[property="og:video"]').attr('content');
+    const ogVideoUrl = $('meta[property="og:video:url"]').attr('content');
+    
+    console.log(`Meta tags - ogImage: ${ogImage ? 'found' : 'not found'}, ogVideo: ${ogVideo ? 'found' : 'not found'}`);
+    
+    // Find the main image or video
+    if (mediaType === 'video' && (ogVideo || ogVideoUrl)) {
+      // We found a video
+      mediaUrl = ogVideoUrl || ogVideo || '';
+      thumbnailUrl = ogImage || '';
+    } else {
+      // Either it's an image or we couldn't find video, use image
+      mediaType = 'image';
+      
+      // Try different selectors to find high-quality images
+      const imageSelectors = [
+        'meta[property="og:image"]',
+        'meta[property="pinterest:pinimage"]',
+        'img[src*="orig"]', // Original Pinterest images often have 'orig' in the URL
+        'img[src*="736x"]', // High-res Pinterest thumbnails
+      ];
+      
+      // Try each selector until we find an image
+      for (const selector of imageSelectors) {
+        const found = $(selector).first();
+        if (found.length) {
+          mediaUrl = found.attr('content') || found.attr('src') || '';
+          if (mediaUrl) break;
+        }
+      }
+      
+      // If we still didn't find an image, try any image on the page
+      if (!mediaUrl) {
+        const anyImg = $('img').first();
+        mediaUrl = anyImg.attr('src') || '';
+      }
+      
+      thumbnailUrl = mediaUrl;
+    }
+    
+    console.log(`Extracted media URL: ${mediaUrl ? mediaUrl.substring(0, 50) + '...' : 'not found'}`);
+    
+    // If still no media found, fall back to a reliable sample
+    if (!mediaUrl) {
+      console.log('Could not extract media from Pinterest URL, using fallback');
+      throw new Error('Could not extract media from Pinterest URL');
+    }
+    
+    // Estimate dimensions and size based on type
+    const metadata = {
+      width: mediaType === 'video' ? 1280 : 1080,
+      height: mediaType === 'video' ? 720 : 1080,
+      duration: mediaType === 'video' ? 15 : undefined,
+      size: mediaType === 'video' ? 8400000 : 1200000, // Estimated sizes
+      title: title
+    };
+    
+    return {
+      thumbnailUrl,
+      mediaUrl,
+      mediaType,
+      metadata
+    };
+  } catch (error) {
+    console.error('Error extracting Pinterest media:', error);
+    throw new Error('Failed to extract media from Pinterest URL. Please try a different URL.');
+  }
+}
+
 // Helper function to validate and process Pinterest URL
 async function processPinterestUrl(input: PinterestUrlInput) {
   try {
-    // In a real implementation, this would properly extract media from Pinterest URLs
-    // using their API or scraping techniques. For this demo, we'll use static images
+    // Extract pin ID from URL for logging/reference
+    const pinId = input.url.match(/pin\/(\d+)\/?/)?.[1] || 
+                  input.url.match(/\/([^\/]+)$/)?.[1] || "unknown";
     
-    // Simulate an API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    console.log(`Processing Pinterest URL for pin ID: ${pinId}`);
     
-    const urlObj = new URL(input.url);
-    const pathParts = urlObj.pathname.split('/');
-    const pinId = pathParts.find(part => /^\d+$/.test(part)) || "unknown";
-    
-    // Generate placeholder data based on the requested type
-    let mediaType = "image";
+    // Set quality based on input type
     let quality = "standard";
-    
-    if (input.type === "hd_video") {
-      mediaType = "video";
-      quality = "hd";
-    } else if (input.type === "hd_image") {
-      mediaType = "image";
+    if (input.type === "hd_video" || input.type === "hd_image") {
       quality = "hd";
     }
     
-    // Use static image URLs that are more reliable for our demo
-    // Pinterest ID deterministically maps to one of 5 demo images
-    const imageNumber = (parseInt(pinId.replace(/\D/g, '')) % 5) + 1;
+    // Extract actual media from Pinterest
+    const extractedMedia = await extractPinterestMedia(input.url, input.type);
     
-    // Create a simulated response with reliable images
+    // Create response with real Pinterest data
     const mediaData = {
       url: input.url,
-      mediaType,
+      mediaType: extractedMedia.mediaType,
       quality,
-      thumbnailUrl: `https://picsum.photos/id/${imageNumber * 10}/200/200`, // Reliable placeholder images
-      mediaUrl: mediaType === "video" 
-        ? `https://www.w3schools.com/html/mov_bbb.mp4` // Public sample video
-        : `https://picsum.photos/id/${imageNumber * 10}/1200/1200`,
-      metadata: {
-        width: mediaType === "video" ? 1920 : 1200,
-        height: mediaType === "video" ? 1080 : 1200,
-        duration: mediaType === "video" ? 18 : undefined,
-        size: mediaType === "video" ? 12400000 : 2400000, // 12.4MB for video, 2.4MB for image
-        title: `Pinterest ${mediaType} ${pinId}`
-      }
+      thumbnailUrl: extractedMedia.thumbnailUrl,
+      mediaUrl: extractedMedia.mediaUrl,
+      metadata: extractedMedia.metadata
     };
     
     return mediaData;

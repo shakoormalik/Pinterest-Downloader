@@ -33,14 +33,13 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
   // Effect for URL changes to show thumbnail preview
   useEffect(() => {
     if (url && validatePinterestUrl(url)) {
+      // For now, just show a loading indicator
+      // The actual Pinterest image will be fetched when the user clicks download
+      setShowThumbnail(true);
+      
+      // Extract pin ID for potential future use
       const pinId = extractPinId(url);
-      if (pinId) {
-        // Map the Pinterest ID to one of 5 demo images (same logic as server)
-        const imageNumber = (parseInt(pinId.replace(/\D/g, '')) % 5) + 1;
-        // Use Lorem Picsum for reliable static images
-        setThumbnailUrl(`https://picsum.photos/id/${imageNumber * 10}/300/300`);
-        setShowThumbnail(true);
-      } else {
+      if (!pinId) {
         setShowThumbnail(false);
       }
     } else {
@@ -286,17 +285,28 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                 </Button>
               </div>
               
-              {/* Thumbnail preview after URL paste */}
+              {/* Thumbnail preview indicator after URL paste */}
               {showThumbnail && (
                 <div className="mt-3">
-                  <div className="rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-700 w-1/3 mx-auto aspect-square">
-                    <img 
-                      src={thumbnailUrl}
-                      alt="Content thumbnail" 
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-700 w-1/3 mx-auto aspect-square flex items-center justify-center">
+                    {thumbnailUrl ? (
+                      <img 
+                        src={thumbnailUrl}
+                        alt="Content thumbnail" 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-center p-4">
+                        <div className="inline-block animate-pulse w-12 h-12 text-primary">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <p className="text-xs mt-2 text-neutral-500 dark:text-neutral-400">Content will be fetched when you click Download</p>
+                      </div>
+                    )}
                   </div>
-                  <p className="text-xs text-center mt-2 text-neutral-500 dark:text-neutral-400">Preview of content to be downloaded</p>
+                  <p className="text-xs text-center mt-2 text-neutral-500 dark:text-neutral-400">Click Download to fetch actual Pinterest content</p>
                 </div>
               )}
             </div>
