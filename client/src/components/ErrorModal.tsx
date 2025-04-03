@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 
@@ -13,6 +13,10 @@ export default function ErrorModal({ isOpen, onClose, message, details }: ErrorM
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-white dark:bg-dark-card rounded-lg shadow-xl max-w-md w-full z-10 p-6">
+        <DialogTitle className="sr-only">Error</DialogTitle>
+        <DialogDescription className="sr-only">
+          {message || "We couldn't process this URL. Please make sure it's a valid Pinterest link."}
+        </DialogDescription>
         <div className="text-center">
           <div className="w-16 h-16 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-300" />

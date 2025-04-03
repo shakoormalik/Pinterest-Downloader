@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Download } from "lucide-react";
 import { PinterestMedia } from "@shared/schema";
@@ -28,6 +28,8 @@ export default function SuccessModal({ isOpen, onClose, media }: SuccessModalPro
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-white dark:bg-dark-card rounded-lg shadow-xl max-w-md w-full z-10 p-6">
+        <DialogTitle className="sr-only">Download Success</DialogTitle>
+        <DialogDescription className="sr-only">Your Pinterest content has been downloaded successfully.</DialogDescription>
         <div className="text-center">
           <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-300" />
