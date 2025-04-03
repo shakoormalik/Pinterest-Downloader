@@ -552,7 +552,55 @@
     async function fetchPinterestContent(url, pinId) {
       // Try multiple methods to get Pinterest content
       
-      // Method 1: Try direct fetch with CORS proxy
+      // Method 1: Try backend API (our optimized server-side approach)
+      try {
+        console.log('Using backend API to process Pinterest URL');
+        const response = await fetch('/api/media/process', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            url: url,
+            format: 'hd_image' // Default to high quality image (will still get video if it's a video pin)
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.warn('Backend API failed:', errorData.message || response.statusText);
+          throw new Error(errorData.message || 'Failed to fetch from server');
+        }
+        
+        const mediaData = await response.json();
+        console.log('Media data from server:', mediaData);
+        
+        // Convert server response to our format
+        const result = {
+          type: mediaData.mediaType || 'image',
+          title: mediaData.title || 'Pinterest Media',
+          pinId: pinId
+        };
+        
+        // Set image and video URLs appropriately
+        if (mediaData.mediaType === 'video') {
+          console.log('Using video URL:', mediaData.mediaUrl);
+          result.type = 'video';
+          result.videoUrl = mediaData.mediaUrl;
+          result.imageUrl = mediaData.thumbnailUrl || mediaData.mediaUrl;
+        } else {
+          console.log('Using thumbnail URL:', mediaData.thumbnailUrl);
+          result.type = 'image';
+          result.imageUrl = mediaData.mediaUrl || mediaData.thumbnailUrl;
+        }
+        
+        return result;
+      } catch (serverError) {
+        console.warn('Backend processing failed, falling back to client-side methods:', serverError);
+        // Continue to client-side methods
+      }
+      
+      // Method 2: Try direct fetch with CORS proxy
       for (const proxy of corsProxies) {
         try {
           console.log(`Trying proxy: ${proxy}`);
@@ -576,7 +624,7 @@
         }
       }
       
-      // Method 2: Try Pinterest API endpoints
+      // Method 3: Try Pinterest API endpoints with CORS proxies
       const apiEndpoints = [
         `https://www.pinterest.com/pin/${pinId}/`,
         `https://www.pinterest.com/_ngjs/resource/PinResource/get/?source_url=%2Fpin%2F${pinId}%2F&data=%7B%22options%22%3A%7B%22id%22%3A%22${pinId}%22%7D%2C%22context%22%3A%7B%7D%7D`,
@@ -783,16 +831,19 @@
       // Choose the URL to download based on current media type and quality
       let downloadUrl = null;
       let filename = null;
+      let contentType = null;
       
       if (currentMedia.type === 'video') {
         downloadUrl = currentMedia.videoUrl;
         filename = `pinterest_video_${currentMedia.pinId}.mp4`;
+        contentType = 'video/mp4';
       } else {
         // For images, we just use the image URL
         // Pinterest doesn't provide different quality options for images
         // in the same way it does for videos
         downloadUrl = currentMedia.imageUrl;
         filename = `pinterest_image_${currentMedia.pinId}.jpg`;
+        contentType = 'image/jpeg';
       }
       
       if (!downloadUrl) {
@@ -805,7 +856,70 @@
       downloadBtn.textContent = 'Downloading...';
       
       try {
-        // Attempt direct download first
+        // Method 1: Try using our server's proxy - most reliable method to bypass CORS
+        try {
+          console.log('Trying server-side proxy for download');
+          // Use our server's proxy to fetch the content
+          const proxyUrl = `/api/proxy/media?url=${encodeURIComponent(downloadUrl)}&contentType=${encodeURIComponent(contentType)}`;
+          
+          // Just open this URL directly as the server adds the Content-Disposition header
+          const a = document.createElement('a');
+          a.href = proxyUrl;
+          a.download = filename; // Browsers will use this as a suggestion
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          
+          // Success message
+          downloadBtn.textContent = 'Downloaded!';
+          setTimeout(() => {
+            downloadBtn.disabled = false;
+            downloadBtn.textContent = 'Download';
+          }, 2000);
+          
+          return; // Successfully initiated download
+        } catch (proxyError) {
+          console.error('Server proxy download error:', proxyError);
+          // Fall through to method 2
+        }
+        
+        // Method 2: Try using fetch directly to get the media as a blob
+        try {
+          console.log('Trying direct fetch as blob');
+          const response = await fetch(downloadUrl);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          
+          // Clean up the blob URL
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+          
+          // Success message
+          downloadBtn.textContent = 'Downloaded!';
+          setTimeout(() => {
+            downloadBtn.disabled = false;
+            downloadBtn.textContent = 'Download';
+          }, 2000);
+          
+          return; // Successfully downloaded
+        } catch (fetchError) {
+          console.error('Fetch download error:', fetchError);
+          // Fall through to method 3
+        }
+        
+        // Method 3: Try direct download with 'download' attribute
+        console.log('Trying direct download with attribute');
         const a = document.createElement('a');
         a.href = downloadUrl;
         a.download = filename;
@@ -822,10 +936,36 @@
           downloadBtn.textContent = 'Download';
         }, 2000);
       } catch (error) {
-        console.error('Download error:', error);
+        console.error('All download methods failed:', error);
+        
+        // Method 4: Fallback to manual download instructions
         downloadBtn.disabled = false;
         downloadBtn.textContent = 'Download';
-        showError('Failed to download. Try right-clicking on the preview and select "Save as..."');
+        
+        // Clean up any previous instructions
+        const existingInstructions = document.querySelector('.manual-download-instructions');
+        if (existingInstructions) {
+          existingInstructions.remove();
+        }
+        
+        // Show manual download instructions
+        const manualInstructions = document.createElement('div');
+        manualInstructions.className = 'manual-download-instructions';
+        manualInstructions.innerHTML = `
+          <div style="background-color: #fff8e1; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px;">
+            <h4 style="margin-top: 0; color: #e65100;">Unable to automatically download</h4>
+            <p>Please try these steps instead:</p>
+            <ol style="padding-left: 20px;">
+              <li>Right-click on the ${currentMedia.type === 'video' ? 'video' : 'image'} above</li>
+              <li>Select "Save ${currentMedia.type === 'video' ? 'video' : 'image'} as..." from the menu</li>
+              <li>Choose where to save the file on your computer</li>
+            </ol>
+            <p style="margin-bottom: 0;"><small>This happens because some websites restrict automatic downloads.</small></p>
+          </div>
+        `;
+        
+        // Insert the instructions after the download button
+        downloadBtn.parentNode.insertBefore(manualInstructions, downloadBtn.nextSibling);
       }
     }
     

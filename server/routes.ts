@@ -471,81 +471,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.sendFile(path.join(process.cwd(), 'webapp', 'index.html'));
   });
   
-  // Proxy endpoint for Pinterest images - uses SVG placeholders to avoid CORS/referrer issues
-  app.get(`${apiPrefix}/proxy/image`, (req: Request, res: Response) => {
+  // Proxy endpoint for Pinterest media - can be used for both images and videos
+  app.get(`${apiPrefix}/proxy/media`, (req: Request, res: Response) => {
     try {
-      const imageUrl = req.query.url as string;
+      const mediaUrl = req.query.url as string;
       
-      if (!imageUrl) {
-        return res.status(400).json({ message: "Image URL is required" });
+      if (!mediaUrl) {
+        return res.status(400).json({ message: "Media URL is required" });
       }
       
-      // Extract a simple ID from the URL for creating consistent unique placeholders
-      let idMatch = /\/([a-z0-9]+)\.jpg/i.exec(imageUrl);
-      const imageId = idMatch ? idMatch[1] : '';
+      const isVideo = mediaUrl.includes('video') || mediaUrl.toLowerCase().includes('mp4');
+      const contentType = req.query.contentType as string || (isVideo ? 'video/mp4' : 'image/jpeg');
       
-      // If URL contains video keyword, make a video placeholder
-      const isVideo = imageUrl.includes('video') || imageUrl.toLowerCase().includes('mp4');
+      // Set CORS headers to allow access from any origin
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Methods', 'GET');
+      res.header('Access-Control-Allow-Headers', 'Content-Type');
       
-      // Generate unique color based on imageId or full URL
-      const hash = imageId 
-        ? imageId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-        : imageUrl.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      
-      const hue = hash % 360;
-      const saturation = 80 + (hash % 20); // 80-100%
-      const lightness = 55 + (hash % 25); // 55-80%
-      
-      // Set correct headers for SVG
-      res.setHeader('Content-Type', 'image/svg+xml');
-      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-      
-      // Generate Pinterest-style placeholder SVG with unique coloring based on URL
-      if (isVideo) {
-        // Video placeholder with play button
-        const svgVideo = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 200">
-          <defs>
-            <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:hsl(${hue}, ${saturation}%, ${lightness}%);stop-opacity:1" />
-              <stop offset="100%" style="stop-color:hsl(${(hue + 30) % 360}, ${saturation}%, ${lightness - 10}%);stop-opacity:1" />
-            </linearGradient>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grad1)" />
-          <circle cx="100" cy="100" r="30" fill="rgba(0,0,0,0.5)" />
-          <path d="M90,80 L90,120 L120,100 Z" fill="white" />
-          <rect x="0" y="180" width="100%" height="20" fill="rgba(0,0,0,0.3)" />
-          <text x="50%" y="194" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="white">
-            Pinterest Video
-          </text>
-        </svg>`;
-        return res.send(svgVideo);
-      } else {
-        // Image placeholder with Pinterest logo-inspired design
-        const svgPlaceholder = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 200">
-          <defs>
-            <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:hsl(${hue}, ${saturation}%, ${lightness}%);stop-opacity:1" />
-              <stop offset="100%" style="stop-color:hsl(${(hue + 30) % 360}, ${saturation}%, ${lightness - 10}%);stop-opacity:1" />
-            </linearGradient>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grad1)" />
-          <g fill="#ffffff">
-            <circle cx="100" cy="70" r="20" opacity="0.6" />
-            <path d="M100,20 C134.83,20 163,48.17 163,83 C163,113.22 141.55,138.45 113,143.97 C111.38,144.27 109.72,144.5 108,144.65 C106.81,144.76 105.67,143.93 105.36,142.77 C103.85,138.23 103,132.89 103,128 C103,125.95 103.3,122.4 104,120 L93,120 C88.58,120 85,116.42 85,112 L85,83 C85,48.19 113.19,20 148,20 L100,20 Z" opacity="0.4" />
-          </g>
-          <rect x="0" y="180" width="100%" height="20" fill="rgba(0,0,0,0.3)" />
-          <text x="50%" y="194" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="white">
-            Pinterest Image
-          </text>
-        </svg>`;
-        return res.send(svgPlaceholder);
-      }
+      // Forward the media
+      axios({
+        method: 'get',
+        url: mediaUrl,
+        responseType: 'stream',
+        headers: {
+          // Spoof common browser headers to bypass simple anti-scraping measures
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,video/*,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://www.pinterest.com/',
+          'sec-ch-ua': '"Google Chrome";v="91", " Not;A Brand";v="99", "Chromium";v="91"',
+          'sec-ch-ua-mobile': '?0',
+          'sec-fetch-dest': 'image',
+          'sec-fetch-mode': 'no-cors',
+          'sec-fetch-site': 'cross-site'
+        },
+        timeout: 15000 // 15 second timeout
+      })
+      .then(response => {
+        // Set appropriate content headers
+        res.set('Content-Type', contentType);
+        
+        // For image/video content, also add download-friendly headers
+        const filename = 'pinterest_media.' + (isVideo ? 'mp4' : 'jpg');
+        res.set('Content-Disposition', `attachment; filename="${filename}"`);
+        
+        // Pipe the stream to the response
+        response.data.pipe(res);
+      })
+      .catch(error => {
+        console.error('Media proxy error:', error);
+        
+        // If we can't proxy the actual media, use fallback placeholders
+        const hash = mediaUrl.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const hue = hash % 360;
+        const saturation = 80 + (hash % 20); // 80-100%
+        const lightness = 55 + (hash % 25); // 55-80%
+        
+        // Set correct headers for SVG
+        res.setHeader('Content-Type', 'image/svg+xml');
+        
+        // Generate Pinterest-style placeholder SVG with unique coloring based on URL
+        if (isVideo) {
+          // Video placeholder with play button
+          const svgVideo = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 200">
+            <defs>
+              <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:hsl(${hue}, ${saturation}%, ${lightness}%);stop-opacity:1" />
+                <stop offset="100%" style="stop-color:hsl(${(hue + 30) % 360}, ${saturation}%, ${lightness - 10}%);stop-opacity:1" />
+              </linearGradient>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grad1)" />
+            <circle cx="100" cy="100" r="30" fill="rgba(0,0,0,0.5)" />
+            <path d="M90,80 L90,120 L120,100 Z" fill="white" />
+            <rect x="0" y="180" width="100%" height="20" fill="rgba(0,0,0,0.3)" />
+            <text x="50%" y="194" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="white">
+              Pinterest Video Unavailable
+            </text>
+          </svg>`;
+          return res.send(svgVideo);
+        } else {
+          // Image placeholder with Pinterest logo-inspired design
+          const svgPlaceholder = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 200">
+            <defs>
+              <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:hsl(${hue}, ${saturation}%, ${lightness}%);stop-opacity:1" />
+                <stop offset="100%" style="stop-color:hsl(${(hue + 30) % 360}, ${saturation}%, ${lightness - 10}%);stop-opacity:1" />
+              </linearGradient>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grad1)" />
+            <g fill="#ffffff">
+              <circle cx="100" cy="70" r="20" opacity="0.6" />
+              <path d="M100,20 C134.83,20 163,48.17 163,83 C163,113.22 141.55,138.45 113,143.97 C111.38,144.27 109.72,144.5 108,144.65 C106.81,144.76 105.67,143.93 105.36,142.77 C103.85,138.23 103,132.89 103,128 C103,125.95 103.3,122.4 104,120 L93,120 C88.58,120 85,116.42 85,112 L85,83 C85,48.19 113.19,20 148,20 L100,20 Z" opacity="0.4" />
+            </g>
+            <rect x="0" y="180" width="100%" height="20" fill="rgba(0,0,0,0.3)" />
+            <text x="50%" y="194" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="white">
+              Pinterest Image Unavailable
+            </text>
+          </svg>`;
+          return res.send(svgPlaceholder);
+        }
+      });
     } catch (error: any) {
-      console.error('Image proxy error:', error.message);
+      console.error('Media proxy initialization error:', error.message);
       
-      // Return a generic placeholder as absolute final fallback
+      // Return a generic error placeholder
       res.setHeader('Content-Type', 'image/svg+xml');
       const errorSvg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 200">
@@ -553,11 +584,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         <path d="M94,140 L106,140 L106,115 L94,115 Z M94,110 L106,110 L106,58 L94,58 Z" fill="#888" />
         <circle cx="100" cy="100" r="60" stroke="#888" stroke-width="2" fill="none" />
         <text x="50%" y="170" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">
-          Image Not Available
+          Media Not Available
         </text>
       </svg>`;
       
       res.send(errorSvg);
+    }
+  });
+  
+  // Keep the original image proxy endpoint for backwards compatibility
+  app.get(`${apiPrefix}/proxy/image`, (req: Request, res: Response) => {
+    // Forward to the new media proxy
+    const imageUrl = req.query.url as string;
+    if (imageUrl) {
+      res.redirect(`${apiPrefix}/proxy/media?url=${encodeURIComponent(imageUrl)}&contentType=image/jpeg`);
+    } else {
+      res.status(400).json({ message: "Image URL is required" });
     }
   });
   
