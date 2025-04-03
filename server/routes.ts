@@ -488,24 +488,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.header('Access-Control-Allow-Methods', 'GET');
       res.header('Access-Control-Allow-Headers', 'Content-Type');
       
-      // Forward the media
+      // Try to fix any Pinterest URL issues
+      let fixedMediaUrl = mediaUrl;
+      
+      // Fix common Pinterest URL patterns
+      if (fixedMediaUrl.includes('pinimg.com')) {
+        // Make sure we're using the 'orig' quality
+        fixedMediaUrl = fixedMediaUrl.replace(/\/[0-9]+x\//, '/orig/');
+        
+        // Make sure we have the right extension
+        if (!fixedMediaUrl.match(/\.(jpe?g|png|gif|webp|mp4)$/i)) {
+          fixedMediaUrl = isVideo ? fixedMediaUrl + '.mp4' : fixedMediaUrl + '.jpg';
+        }
+      }
+      
+      console.log(`Attempting to fetch media from: ${fixedMediaUrl}`);
+      
+      // Forward the media with updated headers
       axios({
         method: 'get',
-        url: mediaUrl,
+        url: fixedMediaUrl,
         responseType: 'stream',
         headers: {
-          // Spoof common browser headers to bypass simple anti-scraping measures
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          // Enhanced headers to bypass Pinterest protections
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
           'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,video/*,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
           'Referer': 'https://www.pinterest.com/',
-          'sec-ch-ua': '"Google Chrome";v="91", " Not;A Brand";v="99", "Chromium";v="91"',
+          'Origin': 'https://www.pinterest.com',
+          'Connection': 'keep-alive',
+          'sec-ch-ua': '"Google Chrome";v="108", "Chromium";v="108"',
           'sec-ch-ua-mobile': '?0',
-          'sec-fetch-dest': 'image',
+          'sec-ch-ua-platform': '"Windows"',
+          'sec-fetch-dest': isVideo ? 'video' : 'image',
           'sec-fetch-mode': 'no-cors',
-          'sec-fetch-site': 'cross-site'
+          'sec-fetch-site': 'cross-site',
+          'pragma': 'no-cache',
+          'cache-control': 'no-cache',
+          'dnt': '1' // Do Not Track
         },
-        timeout: 15000 // 15 second timeout
+        maxRedirects: 5,  // Allow up to 5 redirects
+        timeout: 15000    // 15 second timeout
       })
       .then(response => {
         // Set appropriate content headers
@@ -518,59 +541,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Pipe the stream to the response
         response.data.pipe(res);
       })
-      .catch(error => {
-        console.error('Media proxy error:', error);
+      .catch(async error => {
+        console.error('Media proxy error:', error.message);
         
-        // If we can't proxy the actual media, use fallback placeholders
-        const hash = mediaUrl.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        const hue = hash % 360;
-        const saturation = 80 + (hash % 20); // 80-100%
-        const lightness = 55 + (hash % 25); // 55-80%
-        
-        // Set correct headers for SVG
-        res.setHeader('Content-Type', 'image/svg+xml');
-        
-        // Generate Pinterest-style placeholder SVG with unique coloring based on URL
-        if (isVideo) {
-          // Video placeholder with play button
-          const svgVideo = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 200">
-            <defs>
-              <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:hsl(${hue}, ${saturation}%, ${lightness}%);stop-opacity:1" />
-                <stop offset="100%" style="stop-color:hsl(${(hue + 30) % 360}, ${saturation}%, ${lightness - 10}%);stop-opacity:1" />
-              </linearGradient>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grad1)" />
-            <circle cx="100" cy="100" r="30" fill="rgba(0,0,0,0.5)" />
-            <path d="M90,80 L90,120 L120,100 Z" fill="white" />
-            <rect x="0" y="180" width="100%" height="20" fill="rgba(0,0,0,0.3)" />
-            <text x="50%" y="194" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="white">
-              Pinterest Video Unavailable
-            </text>
-          </svg>`;
-          return res.send(svgVideo);
+        // Try an alternative URL format for Pinterest images
+        if (!isVideo && fixedMediaUrl.includes('pinimg.com')) {
+          // Try with a different subdomain pattern
+          const alternateUrl = fixedMediaUrl
+            .replace('i.pinimg.com', 'i0.pinimg.com')  // Try i0 instead of i
+            .replace(/\/[0-9]+x\//, '/originals/');    // Try 'originals' folder
+          
+          console.log(`Trying alternate URL: ${alternateUrl}`);
+          
+          try {
+            const altResponse = await axios({
+              method: 'get',
+              url: alternateUrl,
+              responseType: 'stream',
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://www.pinterest.com/',
+                'Origin': 'https://www.pinterest.com'
+              },
+              timeout: 10000
+            });
+            
+            res.set('Content-Type', contentType);
+            return altResponse.data.pipe(res);
+          } catch (error) {
+            // Handle the error properly with type checking
+            if (error instanceof Error) {
+              console.error('Alternate URL failed:', error.message);
+            } else {
+              console.error('Alternate URL failed with unknown error');
+            }
+            
+            // Last resort: Try to redirect to the original URL directly
+            return res.redirect(302, mediaUrl);
+          }
         } else {
-          // Image placeholder with Pinterest logo-inspired design
-          const svgPlaceholder = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 200">
-            <defs>
-              <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:hsl(${hue}, ${saturation}%, ${lightness}%);stop-opacity:1" />
-                <stop offset="100%" style="stop-color:hsl(${(hue + 30) % 360}, ${saturation}%, ${lightness - 10}%);stop-opacity:1" />
-              </linearGradient>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grad1)" />
-            <g fill="#ffffff">
-              <circle cx="100" cy="70" r="20" opacity="0.6" />
-              <path d="M100,20 C134.83,20 163,48.17 163,83 C163,113.22 141.55,138.45 113,143.97 C111.38,144.27 109.72,144.5 108,144.65 C106.81,144.76 105.67,143.93 105.36,142.77 C103.85,138.23 103,132.89 103,128 C103,125.95 103.3,122.4 104,120 L93,120 C88.58,120 85,116.42 85,112 L85,83 C85,48.19 113.19,20 148,20 L100,20 Z" opacity="0.4" />
-            </g>
-            <rect x="0" y="180" width="100%" height="20" fill="rgba(0,0,0,0.3)" />
-            <text x="50%" y="194" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="white">
-              Pinterest Image Unavailable
-            </text>
-          </svg>`;
-          return res.send(svgPlaceholder);
+          // If all attempts fail for videos, redirect to the original URL
+          return res.redirect(302, mediaUrl);
         }
       });
     } catch (error: any) {

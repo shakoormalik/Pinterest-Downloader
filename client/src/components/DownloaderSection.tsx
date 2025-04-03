@@ -7,8 +7,25 @@ import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PinterestMedia } from "@shared/schema";
 import { validatePinterestUrl } from "@/utils/validation";
+
+// Define PinterestMedia type directly to avoid import issues
+interface PinterestMedia {
+  id: number;
+  url: string;
+  mediaType: 'video' | 'image';
+  quality: string;
+  mediaUrl: string;
+  thumbnailUrl?: string;
+  downloadedAt: string;
+  metadata?: {
+    title?: string;
+    size?: number;
+    width?: number;
+    height?: number;
+    duration?: number;
+  };
+}
 import useLocalStorage from "@/hooks/useLocalStorage";
 
 interface DownloaderSectionProps {
@@ -47,13 +64,13 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
     }
   }, [currentMedia]);
 
-  // Fetch history from server
-  const { data: serverHistory, isLoading: isHistoryLoading } = useQuery({
+  // Fetch history from server - we actually use the local storage history instead of server
+  const { isLoading: isHistoryLoading } = useQuery({
     queryKey: ['/api/media/history'],
   });
 
   // Process URL mutation
-  const { mutate: processUrl, isPending: isProcessing } = useMutation({
+  const { isPending: isProcessing } = useMutation({
     mutationFn: async () => {
       const response = await apiRequest('POST', '/api/media/process', {
         url: url.trim(),
@@ -524,10 +541,19 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                               alt="Pinterest image preview" 
                               className="w-full h-auto object-contain"
                               onError={(e) => {
-                                console.log("Format preview image error");
+                                console.log("Format preview image error, trying direct URL");
                                 const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                target.parentElement?.classList.add('image-error');
+                                // Try using the original URL directly as a last resort
+                                target.src = currentMedia.mediaUrl || '';
+                                
+                                // If that also fails, show a minimal error state
+                                target.onerror = () => {
+                                  console.log("All image sources failed");
+                                  target.onerror = null; // Prevent infinite loop
+                                  target.style.display = 'block';
+                                  target.style.minHeight = '100px';
+                                  target.alt = "Image unavailable - try downloading directly";
+                                };
                               }}
                             />
                           </div>
@@ -627,7 +653,37 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                           className="w-full h-full max-h-[300px] object-contain"
                           preload="auto"
                           onError={(e) => {
-                            console.log("Video failed to load:", e);
+                            console.log("Video failed to load through proxy, trying direct URL");
+                            const target = e.target as HTMLVideoElement;
+                            // Try using the direct URL as fallback
+                            target.src = currentMedia.mediaUrl || '';
+                            
+                            // Add a second error handler for the fallback URL
+                            target.onerror = () => {
+                              console.log("All video sources failed");
+                              target.onerror = null; // Prevent infinite loop
+                              
+                              // Display a simple message when video can't be loaded
+                              const videoContainer = target.parentElement;
+                              if (videoContainer) {
+                                target.style.display = 'none';
+                                
+                                // Create a message element for better UX
+                                const messageDiv = document.createElement('div');
+                                messageDiv.className = 'flex flex-col items-center justify-center h-full w-full p-4 text-center';
+                                messageDiv.innerHTML = `
+                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-neutral-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <p class="text-neutral-700 dark:text-neutral-300 font-medium">Video preview unavailable</p>
+                                  <p class="text-xs text-neutral-500 mt-1">Try downloading directly</p>
+                                `;
+                                videoContainer.appendChild(messageDiv);
+                              }
+                            };
+                            
+                            // Try to play the video with the direct URL
+                            target.load();
                           }}
                         />
                       ) : (
