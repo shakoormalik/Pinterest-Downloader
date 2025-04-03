@@ -262,25 +262,25 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
     });
   };
 
-  // Function to get proxied Pinterest image URL to bypass the CORS and referrer issues
+  // Function to get Pinterest media URL - using direct URLs now since Pinterest blocks proxies
   const getProxiedImageUrl = (url: string | null | undefined): string => {
     if (!url) return '';
     
-    // Only proxy Pinterest images
-    if (url.includes('pinimg.com') || url.includes('pinterest')) {
-      return `/api/proxy/image?url=${encodeURIComponent(url)}`;
+    // For Pinterest images, ensure we get high quality version
+    if (url.includes('pinimg.com')) {
+      return url.replace(/\/[0-9]+x\//, '/orig/');
     }
     
     return url;
   };
   
-  // Function to get proxied Pinterest video URL to bypass CORS issues
+  // Function to get Pinterest video URL with the same approach
   const getProxiedVideoUrl = (url: string | null | undefined): string => {
     if (!url) return '';
     
-    // Only proxy Pinterest videos
-    if (url.includes('pinimg.com') || url.includes('pinterest')) {
-      return `/api/proxy/media?url=${encodeURIComponent(url)}`;
+    // For Pinterest videos, ensure we get high quality version
+    if (url.includes('pinimg.com')) {
+      return url.replace(/\/[0-9]+x\//, '/orig/');
     }
     
     return url;

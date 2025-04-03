@@ -471,8 +471,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.sendFile(path.join(process.cwd(), 'webapp', 'index.html'));
   });
   
-  // Proxy endpoint for Pinterest media - can be used for both images and videos
-  app.get(`${apiPrefix}/proxy/media`, (req: Request, res: Response) => {
+  // Direct media endpoint - returns a modified URL for Pinterest media
+  app.get(`${apiPrefix}/direct-media`, (req: Request, res: Response) => {
     try {
       const mediaUrl = req.query.url as string;
       
@@ -481,128 +481,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const isVideo = mediaUrl.includes('video') || mediaUrl.toLowerCase().includes('mp4');
-      const contentType = req.query.contentType as string || (isVideo ? 'video/mp4' : 'image/jpeg');
       
-      // Set CORS headers to allow access from any origin
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Methods', 'GET');
-      res.header('Access-Control-Allow-Headers', 'Content-Type');
+      // Process the URL to get the best version
+      let processedUrl = mediaUrl;
       
-      // Try to fix any Pinterest URL issues
-      let fixedMediaUrl = mediaUrl;
-      
-      // Fix common Pinterest URL patterns
-      if (fixedMediaUrl.includes('pinimg.com')) {
+      // Fix common Pinterest URL patterns for direct access
+      if (processedUrl.includes('pinimg.com')) {
         // Make sure we're using the 'orig' quality
-        fixedMediaUrl = fixedMediaUrl.replace(/\/[0-9]+x\//, '/orig/');
+        processedUrl = processedUrl.replace(/\/[0-9]+x\//, '/orig/');
         
         // Make sure we have the right extension
-        if (!fixedMediaUrl.match(/\.(jpe?g|png|gif|webp|mp4)$/i)) {
-          fixedMediaUrl = isVideo ? fixedMediaUrl + '.mp4' : fixedMediaUrl + '.jpg';
+        if (!processedUrl.match(/\.(jpe?g|png|gif|webp|mp4)$/i)) {
+          processedUrl = isVideo ? processedUrl + '.mp4' : processedUrl + '.jpg';
         }
       }
       
-      console.log(`Attempting to fetch media from: ${fixedMediaUrl}`);
-      
-      // Forward the media with updated headers
-      axios({
-        method: 'get',
-        url: fixedMediaUrl,
-        responseType: 'stream',
-        headers: {
-          // Enhanced headers to bypass Pinterest protections
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
-          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,video/*,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Referer': 'https://www.pinterest.com/',
-          'Origin': 'https://www.pinterest.com',
-          'Connection': 'keep-alive',
-          'sec-ch-ua': '"Google Chrome";v="108", "Chromium";v="108"',
-          'sec-ch-ua-mobile': '?0',
-          'sec-ch-ua-platform': '"Windows"',
-          'sec-fetch-dest': isVideo ? 'video' : 'image',
-          'sec-fetch-mode': 'no-cors',
-          'sec-fetch-site': 'cross-site',
-          'pragma': 'no-cache',
-          'cache-control': 'no-cache',
-          'dnt': '1' // Do Not Track
-        },
-        maxRedirects: 5,  // Allow up to 5 redirects
-        timeout: 15000    // 15 second timeout
-      })
-      .then(response => {
-        // Set appropriate content headers
-        res.set('Content-Type', contentType);
-        
-        // For image/video content, also add download-friendly headers
-        const filename = 'pinterest_media.' + (isVideo ? 'mp4' : 'jpg');
-        res.set('Content-Disposition', `attachment; filename="${filename}"`);
-        
-        // Pipe the stream to the response
-        response.data.pipe(res);
-      })
-      .catch(async error => {
-        console.error('Media proxy error:', error.message);
-        
-        // Try an alternative URL format for Pinterest images
-        if (!isVideo && fixedMediaUrl.includes('pinimg.com')) {
-          // Try with a different subdomain pattern
-          const alternateUrl = fixedMediaUrl
-            .replace('i.pinimg.com', 'i0.pinimg.com')  // Try i0 instead of i
-            .replace(/\/[0-9]+x\//, '/originals/');    // Try 'originals' folder
-          
-          console.log(`Trying alternate URL: ${alternateUrl}`);
-          
-          try {
-            const altResponse = await axios({
-              method: 'get',
-              url: alternateUrl,
-              responseType: 'stream',
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
-                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Referer': 'https://www.pinterest.com/',
-                'Origin': 'https://www.pinterest.com'
-              },
-              timeout: 10000
-            });
-            
-            res.set('Content-Type', contentType);
-            return altResponse.data.pipe(res);
-          } catch (error) {
-            // Handle the error properly with type checking
-            if (error instanceof Error) {
-              console.error('Alternate URL failed:', error.message);
-            } else {
-              console.error('Alternate URL failed with unknown error');
-            }
-            
-            // Last resort: Try to redirect to the original URL directly
-            return res.redirect(302, mediaUrl);
-          }
-        } else {
-          // If all attempts fail for videos, redirect to the original URL
-          return res.redirect(302, mediaUrl);
-        }
+      return res.json({
+        success: true,
+        url: processedUrl,
+        isVideo: isVideo
       });
     } catch (error: any) {
-      console.error('Media proxy initialization error:', error.message);
+      console.error('Media processing error:', error.message);
       
-      // Return a generic error placeholder
-      res.setHeader('Content-Type', 'image/svg+xml');
-      const errorSvg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 200">
-        <rect width="100%" height="100%" fill="#f0f0f0" />
-        <path d="M94,140 L106,140 L106,115 L94,115 Z M94,110 L106,110 L106,58 L94,58 Z" fill="#888" />
-        <circle cx="100" cy="100" r="60" stroke="#888" stroke-width="2" fill="none" />
-        <text x="50%" y="170" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">
-          Media Not Available
-        </text>
-      </svg>`;
-      
-      res.send(errorSvg);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to process media URL",
+        url: req.query.url as string
+      });
     }
+  });
+  
+  // Legacy proxy endpoint that now just returns the direct URL
+  app.get(`${apiPrefix}/proxy/media`, (req: Request, res: Response) => {
+    const mediaUrl = req.query.url as string;
+    
+    if (!mediaUrl) {
+      return res.status(400).json({ message: "Media URL is required" });
+    }
+    
+    return res.redirect(`${apiPrefix}/direct-media?url=${encodeURIComponent(mediaUrl)}`);
   });
   
   // Keep the original image proxy endpoint for backwards compatibility
