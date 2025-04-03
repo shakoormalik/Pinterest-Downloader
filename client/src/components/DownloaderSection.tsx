@@ -338,14 +338,20 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         
                         // Set current media and show the thumbnail
                         setCurrentMedia(mediaData);
+                        console.log("Media data from server:", mediaData);
+                        
                         // Make sure we have a valid thumbnail URL
                         if (mediaData.thumbnailUrl) {
                           setThumbnailUrl(mediaData.thumbnailUrl);
+                          console.log("Using thumbnail URL:", mediaData.thumbnailUrl);
                         } else if (mediaData.mediaUrl) {
                           // If no thumbnail, use the media URL for images
-                          setThumbnailUrl(mediaData.mediaType === 'image' ? mediaData.mediaUrl : '');
+                          const fallbackUrl = mediaData.mediaType === 'image' ? mediaData.mediaUrl : '';
+                          setThumbnailUrl(fallbackUrl);
+                          console.log("Using fallback thumbnail URL:", fallbackUrl);
                         } else {
                           setThumbnailUrl('');
+                          console.log("No thumbnail URL available");
                         }
                         setShowPreview(true);
                         
@@ -407,26 +413,44 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
               {showThumbnail && (
                 <div className="mt-3">
                   <div className="rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-700 w-1/3 mx-auto aspect-square flex items-center justify-center">
-                    {currentMedia && (currentMedia.thumbnailUrl || currentMedia.mediaUrl) ? (
+                    {currentMedia ? (
+                      // When we have a media object, first try to use its thumbnailUrl
                       <img 
+                        key={`media-${currentMedia.id}-${Date.now()}`} // Force re-render with unique key
                         src={currentMedia.thumbnailUrl || currentMedia.mediaUrl}
                         alt={currentMedia.metadata?.title || "Pinterest content"} 
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          // If thumbnail fails, try mediaUrl as fallback
+                          console.log("Image error, trying fallback");
+                          // If thumbnailUrl fails, try mediaUrl as fallback
                           const target = e.target as HTMLImageElement;
-                          if (target.src !== currentMedia.mediaUrl && currentMedia.mediaUrl) {
+                          const currentSrc = target.src;
+                          
+                          // Try mediaUrl if it exists and is different
+                          if (currentMedia.mediaUrl && currentSrc !== currentMedia.mediaUrl) {
+                            console.log("Using mediaUrl fallback:", currentMedia.mediaUrl);
                             target.src = currentMedia.mediaUrl;
+                          } else {
+                            console.log("All image sources failed");
+                            // If all else fails, show an error state
+                            target.style.display = 'none';
+                            target.parentElement?.classList.add('image-error');
                           }
                         }}
                       />
                     ) : thumbnailUrl ? (
+                      // Fall back to the thumbnailUrl state value if we have it
                       <img 
+                        key={`thumbnail-${Date.now()}`}
                         src={thumbnailUrl}
                         alt="Pinterest content" 
                         className="w-full h-full object-cover"
+                        onError={() => {
+                          console.log("Thumbnail URL failed to load");
+                        }}
                       />
                     ) : (
+                      // Show loading spinner if we're still processing
                       <div className="text-center p-4">
                         <div className="inline-block animate-pulse w-12 h-12 text-primary">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -434,6 +458,14 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                           </svg>
                         </div>
                       </div>
+                    )}
+                  </div>
+                  {/* Add debugging output */}
+                  <div className="text-xs text-center text-neutral-500 mt-1">
+                    {currentMedia ? (
+                      <span>Media ID: {currentMedia.id}</span>
+                    ) : (
+                      <span>Searching for content...</span>
                     )}
                   </div>
                 </div>
@@ -586,13 +618,24 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         />
                       ) : (
                         <img 
+                          key={`preview-${currentMedia.id}-${Date.now()}`} // Force re-render with unique key
                           src={currentMedia.thumbnailUrl || currentMedia.mediaUrl || ""} 
                           alt="Content preview" 
                           className="w-full h-full object-cover"
                           onError={(e) => {
+                            console.log("Preview image error, trying fallback");
                             // If thumbnail fails, try using the media URL as fallback
-                            if (e.currentTarget.src !== currentMedia.mediaUrl && currentMedia.mediaUrl) {
-                              e.currentTarget.src = currentMedia.mediaUrl;
+                            const target = e.target as HTMLImageElement;
+                            const currentSrc = target.src;
+                            
+                            // Try mediaUrl if it exists and is different
+                            if (currentMedia.mediaUrl && currentSrc !== currentMedia.mediaUrl) {
+                              console.log("Using mediaUrl fallback for preview:", currentMedia.mediaUrl);
+                              target.src = currentMedia.mediaUrl;
+                            } else {
+                              console.log("All preview image sources failed");
+                              target.style.display = 'none';
+                              target.parentElement?.classList.add('image-error');
                             }
                           }}
                         />
@@ -699,12 +742,21 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         {item.mediaType === 'video' && (
                           <div className="relative w-full h-full">
                             <img 
+                              key={`history-video-${item.id}-${Date.now()}`}
                               src={item.thumbnailUrl || item.mediaUrl || ""}
                               alt="Video thumbnail" 
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                if (e.currentTarget.src !== item.mediaUrl && item.mediaUrl) {
-                                  e.currentTarget.src = item.mediaUrl;
+                                console.log("History video thumbnail error, trying fallback");
+                                const target = e.target as HTMLImageElement;
+                                const currentSrc = target.src;
+                                
+                                if (currentSrc !== item.mediaUrl && item.mediaUrl) {
+                                  console.log("Using mediaUrl fallback for history video:", item.mediaUrl);
+                                  target.src = item.mediaUrl;
+                                } else {
+                                  target.style.display = 'none';
+                                  target.parentElement?.classList.add('image-error');
                                 }
                               }}
                             />
@@ -720,12 +772,21 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                         
                         {item.mediaType !== 'video' && (item.thumbnailUrl || item.mediaUrl) && (
                           <img 
+                            key={`history-image-${item.id}-${Date.now()}`}
                             src={item.thumbnailUrl || item.mediaUrl || ""}
                             alt="Pinterest content" 
                             className="w-full h-full object-cover"
                             onError={(e) => {
-                              if (e.currentTarget.src !== item.mediaUrl && item.mediaUrl) {
-                                e.currentTarget.src = item.mediaUrl;
+                              console.log("History image thumbnail error, trying fallback");
+                              const target = e.target as HTMLImageElement;
+                              const currentSrc = target.src;
+                              
+                              if (currentSrc !== item.mediaUrl && item.mediaUrl) {
+                                console.log("Using mediaUrl fallback for history image:", item.mediaUrl);
+                                target.src = item.mediaUrl;
+                              } else {
+                                target.style.display = 'none';
+                                target.parentElement?.classList.add('image-error');
                               }
                             }}
                           />

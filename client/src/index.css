@@ -60,3 +60,16 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Custom styles for image loading failures */
+.image-error::before {
+  content: "Failed to load image";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  font-size: 0.875rem;
+  color: #777;
+  text-align: center;
+}
