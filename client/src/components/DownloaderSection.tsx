@@ -257,6 +257,18 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
     
     return url;
   };
+  
+  // Function to get proxied Pinterest video URL to bypass CORS issues
+  const getProxiedVideoUrl = (url: string | null | undefined): string => {
+    if (!url) return '';
+    
+    // Only proxy Pinterest videos
+    if (url.includes('pinimg.com') || url.includes('pinterest')) {
+      return `/api/proxy/media?url=${encodeURIComponent(url)}`;
+    }
+    
+    return url;
+  };
 
   // Format time for display
   const formatTimeAgo = (date: Date) => {
@@ -620,11 +632,17 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                     <div className={`rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-600 ${currentMedia.mediaType === 'video' ? '' : 'aspect-square'}`}>
                       {currentMedia.mediaType === 'video' ? (
                         <video 
-                          src={currentMedia.mediaUrl || ""}
-                          poster={currentMedia.thumbnailUrl || ""}
+                          key={`video-${currentMedia.id}-${Date.now()}`}
+                          src={getProxiedVideoUrl(currentMedia.mediaUrl)}
+                          poster={getProxiedImageUrl(currentMedia.thumbnailUrl)}
                           controls
+                          autoPlay
+                          playsInline
                           className="w-full h-full max-h-[300px] object-contain"
-                          preload="metadata"
+                          preload="auto"
+                          onError={(e) => {
+                            console.log("Video failed to load:", e);
+                          }}
                         />
                       ) : (
                         <img 
