@@ -57,6 +57,44 @@ npm run dev
 3. Select your preferred format (HD Video, HD Image, or Standard Image)
 4. Click the "Download" button to save the file to your device
 
+## Deployment on Vercel
+
+This application can be deployed to Vercel by following these steps:
+
+1. Make sure you have the `vercel.json` file in your project root (it should be included already)
+
+2. Create a Vercel account if you don't have one
+   - Go to [vercel.com](https://vercel.com) and sign up using GitHub, GitLab, or your email
+
+3. Install Vercel CLI (optional)
+   ```bash
+   npm install -g vercel
+   ```
+
+4. Deploy from your repository
+   - Connect your GitHub/GitLab account to Vercel
+   - Import your repository
+   - Set the following deployment settings:
+     - Build Command: `npm run build`
+     - Output Directory: `dist`
+     - Install Command: `npm install`
+
+5. Or deploy from your local machine using Vercel CLI
+   ```bash
+   vercel
+   ```
+
+6. After deployment, your app will be available at a URL provided by Vercel
+
+### Troubleshooting Vercel Deployment
+
+If you see raw HTML or code instead of your app after deployment:
+
+1. Make sure the `vercel.json` file is properly configured (check that it exists in your project root)
+2. Verify that your build script in package.json is correct
+3. Ensure that the "Output Directory" in Vercel project settings is set to `dist`
+4. Check Vercel deployment logs for any errors
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
