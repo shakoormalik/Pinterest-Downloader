@@ -325,8 +325,10 @@
     // CORS proxies to try (in case one doesn't work)
     const corsProxies = [
       'https://corsproxy.io/?',
-      'https://cors-anywhere.herokuapp.com/',
-      'https://api.allorigins.win/raw?url='
+      'https://api.allorigins.win/raw?url=',
+      'https://corsanywhere.herokuapp.com/',
+      'https://crossorigin.me/',
+      'https://thingproxy.freeboard.io/fetch/'
     ];
     
     // Event listeners
@@ -368,15 +370,31 @@
       }
     }
     
-    // Function to fetch Pinterest content using CORS proxies
+    // Function to fetch Pinterest content using multiple strategies
     async function fetchPinterestContent(url) {
+      // First try: Direct API fetch (new approach)
+      try {
+        console.log("Trying direct API approach...");
+        const pinId = extractPinId(url);
+        if (pinId) {
+          const mediaInfo = await fetchPinterestDirectly(pinId);
+          if (mediaInfo) {
+            return mediaInfo;
+          }
+        }
+      } catch (directError) {
+        console.log("Direct API approach failed:", directError);
+      }
+      
+      // Second try: CORS proxy approach (fallback)
       let htmlContent = null;
       let proxyError = null;
       
-      // Try each proxy until one works
+      console.log("Trying CORS proxy approach...");
       for (const proxy of corsProxies) {
         try {
           const proxyUrl = proxy + encodeURIComponent(url);
+          console.log("Trying proxy:", proxy);
           const response = await fetch(proxyUrl);
           
           if (!response.ok) {
@@ -393,12 +411,132 @@
       
       // If all proxies failed
       if (!htmlContent) {
-        console.error('All proxies failed:', proxyError);
-        throw new Error('Could not access Pinterest content.');
+        console.error('All approaches failed:', proxyError);
+        throw new Error('Could not access Pinterest content. Please try a different pin.');
       }
       
       // Parse the HTML to extract media information
       return extractMediaFromHTML(htmlContent, url);
+    }
+    
+    // Extract Pinterest Pin ID from URL
+    function extractPinId(url) {
+      const pinRegex = /pinterest\.[^\/]+\/pin\/([0-9]+)/;
+      const match = url.match(pinRegex);
+      return match ? match[1] : null;
+    }
+    
+    // New direct approach using Pinterest's patterns
+    async function fetchPinterestDirectly(pinId) {
+      // Try several known Pinterest API patterns
+      const endpoints = [
+        `https://www.pinterest.com/pin/${pinId}/`,
+        `https://www.pinterest.com/_ngjs/resource/PinResource/get/?source_url=%2Fpin%2F${pinId}%2F&data=%7B%22options%22%3A%7B%22id%22%3A%22${pinId}%22%7D%2C%22context%22%3A%7B%7D%7D`,
+        `https://www.pinterest.com/resource/PinResource/get/?source_url=%2Fpin%2F${pinId}%2F&data=%7B%22options%22%3A%7B%22id%22%3A%22${pinId}%22%2C%22field_set_key%22%3A%22detailed%22%7D%2C%22context%22%3A%7B%7D%7D`
+      ];
+      
+      for (const endpoint of endpoints) {
+        for (const proxy of corsProxies) {
+          try {
+            const response = await fetch(proxy + encodeURIComponent(endpoint), {
+              headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Cache-Control': 'max-age=0'
+              }
+            });
+            
+            if (!response.ok) continue;
+            
+            const data = await response.text();
+            
+            // Check if it's JSON or HTML
+            if (data.includes('application/json')) {
+              try {
+                // Pinterest sometimes embeds JSON in their HTML responses
+                const jsonMatch = data.match(/\{"resource_response":(.*?),"client_context"/);
+                if (jsonMatch && jsonMatch[1]) {
+                  const jsonData = JSON.parse(jsonMatch[1]);
+                  if (jsonData && jsonData.data) {
+                    const pin = jsonData.data;
+                    
+                    // Extract media
+                    if (pin.videos && pin.videos.video_list) {
+                      // It's a video
+                      const videoFormats = pin.videos.video_list;
+                      const bestVideo = videoFormats.V_720P || videoFormats.V_480P || Object.values(videoFormats)[0];
+                      
+                      return {
+                        type: 'video',
+                        title: pin.title || 'Pinterest Video',
+                        url: bestVideo.url,
+                        originalUrl: `https://www.pinterest.com/pin/${pinId}/`
+                      };
+                    } else if (pin.images) {
+                      // It's an image
+                      const imageFormats = pin.images;
+                      const bestImage = imageFormats.orig || imageFormats['736x'] || imageFormats['474x'] || Object.values(imageFormats)[0];
+                      
+                      return {
+                        type: 'image',
+                        title: pin.title || 'Pinterest Image',
+                        url: bestImage.url,
+                        originalUrl: `https://www.pinterest.com/pin/${pinId}/`
+                      };
+                    }
+                  }
+                }
+              } catch (jsonError) {
+                console.error("JSON parsing error:", jsonError);
+              }
+            } else {
+              // Try to parse as HTML
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(data, 'text/html');
+              
+              // Check for video
+              const videoUrl = getVideoUrl(doc);
+              if (videoUrl) {
+                return {
+                  type: 'video',
+                  title: getTitle(doc) || 'Pinterest Video',
+                  url: videoUrl,
+                  originalUrl: `https://www.pinterest.com/pin/${pinId}/`
+                };
+              }
+              
+              // Check for image
+              const imageUrl = getImageUrl(doc);
+              if (imageUrl) {
+                return {
+                  type: 'image',
+                  title: getTitle(doc) || 'Pinterest Image',
+                  url: imageUrl,
+                  originalUrl: `https://www.pinterest.com/pin/${pinId}/`
+                };
+              }
+            }
+          } catch (error) {
+            console.warn(`Endpoint ${endpoint} with proxy ${proxy} failed:`, error);
+          }
+        }
+      }
+      
+      // If we get here, all attempts failed
+      return null;
+    }
+    
+    // Helper function to get title from doc
+    function getTitle(doc) {
+      const titleTag = doc.querySelector('meta[property="og:title"]');
+      return titleTag ? titleTag.getAttribute('content') : null;
     }
     
     // Function to extract media information from HTML
@@ -526,24 +664,104 @@
         imagePreview.style.display = 'none';
         videoPreview.style.display = 'block';
         previewVideo.src = mediaInfo.url;
-        downloadBtn.href = mediaInfo.url;
         
-        // Set download attribute with appropriate filename
+        // Set up download button for video
         const filename = getFilenameFromUrl(mediaInfo.url, 'pinterest_video.mp4');
-        downloadBtn.setAttribute('download', filename);
+        setupDownloadButton(mediaInfo.url, filename);
+        
+        // Log success
+        console.log("Video preview loaded:", mediaInfo.url);
       } else {
         mediaType.textContent = 'Image';
         imagePreview.style.display = 'block';
         videoPreview.style.display = 'none';
-        previewImage.src = mediaInfo.url;
-        downloadBtn.href = mediaInfo.url;
         
-        // Set download attribute with appropriate filename
+        // Show image with load event to ensure it's properly loaded
+        previewImage.onload = function() {
+          console.log("Image preview loaded successfully");
+        };
+        
+        previewImage.onerror = function() {
+          console.error("Error loading image preview:", mediaInfo.url);
+          // Try to load with a CORS proxy
+          for (const proxy of corsProxies) {
+            previewImage.src = proxy + encodeURIComponent(mediaInfo.url);
+            break;
+          }
+        };
+        
+        previewImage.src = mediaInfo.url;
+        
+        // Set up download button for image
         const filename = getFilenameFromUrl(mediaInfo.url, 'pinterest_image.jpg');
-        downloadBtn.setAttribute('download', filename);
+        setupDownloadButton(mediaInfo.url, filename);
       }
       
       resultContainer.style.display = 'block';
+    }
+    
+    // Helper function to set up the download button
+    function setupDownloadButton(url, filename) {
+      // Direct link approach (works for same-origin or properly CORS-enabled resources)
+      downloadBtn.href = url;
+      downloadBtn.setAttribute('download', filename);
+      
+      // Add click handler as a fallback for cross-origin resources
+      downloadBtn.addEventListener('click', function(e) {
+        // Check if the resource is on another domain
+        if (new URL(url).origin !== window.location.origin) {
+          e.preventDefault(); // Prevent default anchor behavior
+          
+          // Create a temporary link with a CORS proxy or data URL approach
+          fetchAndDownload(url, filename);
+        }
+      });
+    }
+    
+    // Function to fetch and trigger download programmatically
+    async function fetchAndDownload(url, filename) {
+      try {
+        showLoader(true);
+        
+        // Try to fetch through a CORS proxy
+        let blob = null;
+        
+        for (const proxy of corsProxies) {
+          try {
+            const response = await fetch(proxy + encodeURIComponent(url));
+            if (response.ok) {
+              blob = await response.blob();
+              break;
+            }
+          } catch (error) {
+            console.warn(`Proxy ${proxy} failed for download:`, error);
+          }
+        }
+        
+        if (!blob) {
+          throw new Error("Couldn't fetch the media through any proxy");
+        }
+        
+        // Create a blob URL and trigger download
+        const blobUrl = URL.createObjectURL(blob);
+        const tempLink = document.createElement('a');
+        tempLink.href = blobUrl;
+        tempLink.setAttribute('download', filename);
+        tempLink.style.display = 'none';
+        document.body.appendChild(tempLink);
+        
+        // Trigger click and clean up
+        tempLink.click();
+        document.body.removeChild(tempLink);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+        
+        console.log("Download initiated for:", filename);
+      } catch (error) {
+        console.error("Download failed:", error);
+        alert("Download failed. Try right-clicking on the image/video and selecting 'Save as...'");
+      } finally {
+        showLoader(false);
+      }
     }
     
     // Helper function to extract a reasonable filename from URL
