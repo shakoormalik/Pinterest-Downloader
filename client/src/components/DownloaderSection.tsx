@@ -392,12 +392,22 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                 
                 <div className="bg-neutral-100 dark:bg-dark-card rounded-lg p-4 flex flex-col md:flex-row items-center">
                   <div className="w-full md:w-1/3 mb-4 md:mb-0">
-                    <div className="rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-600 aspect-square">
-                      <img 
-                        src={currentMedia.thumbnailUrl} 
-                        alt="Content preview" 
-                        className="w-full h-full object-cover"
-                      />
+                    <div className={`rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-600 ${currentMedia.mediaType === 'video' ? '' : 'aspect-square'}`}>
+                      {currentMedia.mediaType === 'video' ? (
+                        <video 
+                          src={currentMedia.mediaUrl || ""}
+                          poster={currentMedia.thumbnailUrl || ""}
+                          controls
+                          className="w-full h-full max-h-[300px] object-contain"
+                          preload="metadata"
+                        />
+                      ) : (
+                        <img 
+                          src={currentMedia.thumbnailUrl || ""} 
+                          alt="Content preview" 
+                          className="w-full h-full object-cover"
+                        />
+                      )}
                     </div>
                   </div>
                   
@@ -497,9 +507,24 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       className="flex items-center bg-neutral-50 dark:bg-dark-bg rounded-lg p-3 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition duration-200"
                     >
                       <div className="w-16 h-16 bg-neutral-200 dark:bg-neutral-700 rounded overflow-hidden flex-shrink-0">
-                        {item.thumbnailUrl ? (
+                        {item.mediaType === 'video' ? (
+                          <div className="relative w-full h-full">
+                            <img 
+                              src={item.thumbnailUrl || ""} 
+                              alt="Video thumbnail" 
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="w-8 h-8 rounded-full bg-black bg-opacity-50 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                        ) : item.thumbnailUrl ? (
                           <img 
-                            src={item.thumbnailUrl} 
+                            src={item.thumbnailUrl || ""} 
                             alt="Pinterest content" 
                             className="w-full h-full object-cover"
                           />

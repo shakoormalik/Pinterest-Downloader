@@ -38,14 +38,67 @@ async function extractPinterestMedia(url: string, type: string): Promise<{
     const ogImage = $('meta[property="og:image"]').attr('content');
     const ogVideo = $('meta[property="og:video"]').attr('content');
     const ogVideoUrl = $('meta[property="og:video:url"]').attr('content');
+    const ogVideoSecureUrl = $('meta[property="og:video:secure_url"]').attr('content');
+    const ogType = $('meta[property="og:type"]').attr('content') || '';
     
-    console.log(`Meta tags - ogImage: ${ogImage ? 'found' : 'not found'}, ogVideo: ${ogVideo ? 'found' : 'not found'}`);
+    // Look deeper for video content in script tags (Pinterest often hides video URLs in JSON)
+    let scriptVideoUrl = '';
+    try {
+      // Find scripts with JSON content that might contain video URLs
+      const scriptTags = $('script').filter((i, el) => {
+        const scriptContent = $(el).html() || '';
+        return scriptContent.includes('VideoObject') || 
+               scriptContent.includes('contentUrl') || 
+               scriptContent.includes('.mp4');
+      });
+      
+      // Extract video URLs from script tags
+      scriptTags.each((i, el) => {
+        const scriptContent = $(el).html() || '';
+        
+        // Try to find video URLs
+        const videoUrlMatch = scriptContent.match(/"contentUrl":\s*"([^"]+\.mp4[^"]*)"/);
+        if (videoUrlMatch && videoUrlMatch[1]) {
+          scriptVideoUrl = videoUrlMatch[1].replace(/\\/g, '');
+          return false; // break the loop
+        }
+        
+        // Alternative pattern
+        const videoMatch = scriptContent.match(/"url":\s*"([^"]+\.mp4[^"]*)"/);
+        if (videoMatch && videoMatch[1]) {
+          scriptVideoUrl = videoMatch[1].replace(/\\/g, '');
+          return false; // break the loop
+        }
+      });
+    } catch (err) {
+      console.error('Error parsing script tags for video:', err);
+    }
     
-    // Find the main image or video
-    if (mediaType === 'video' && (ogVideo || ogVideoUrl)) {
-      // We found a video
-      mediaUrl = ogVideoUrl || ogVideo || '';
+    console.log(`Meta tags - ogImage: ${ogImage ? 'found' : 'not found'}, ogVideo: ${ogVideo ? 'found' : 'not found'}, scriptVideo: ${scriptVideoUrl ? 'found' : 'not found'}`);
+    
+    // Find the main image or video - prioritize video if requested
+    if (mediaType === 'video' && (ogVideo || ogVideoUrl || ogVideoSecureUrl || scriptVideoUrl || ogType.includes('video'))) {
+      // We found a video or strong indicators of video
+      mediaUrl = scriptVideoUrl || ogVideoSecureUrl || ogVideoUrl || ogVideo || '';
       thumbnailUrl = ogImage || '';
+      
+      // If we found a video URL, ensure it's marked as a video
+      if (mediaUrl) {
+        mediaType = 'video';
+      } else {
+        // We couldn't find a video URL despite indicators, let's look for video tags
+        const videoSources = $('video source, video').map((i, el) => {
+          return $(el).attr('src') || '';
+        }).get().filter(Boolean);
+        
+        if (videoSources.length > 0) {
+          mediaUrl = videoSources[0];
+          mediaType = 'video';
+        } else {
+          // Still no video, fall back to image
+          mediaType = 'image';
+        }
+      }
     } else {
       // Either it's an image or we couldn't find video, use image
       mediaType = 'image';
