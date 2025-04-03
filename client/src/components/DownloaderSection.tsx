@@ -277,12 +277,41 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                 />
                 <Button
                   type="button"
-                  variant="secondary"
-                  className="rounded-l-none rounded-r-lg p-3"
+                  variant="outline"
+                  className="rounded-none border-l-0 p-3"
                   onClick={handlePaste}
                   title="Paste from clipboard"
                 >
                   <Clipboard className="h-5 w-5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="default"
+                  className="rounded-l-none rounded-r-lg bg-neutral-900 hover:bg-black text-white dark:bg-neutral-800 dark:hover:bg-neutral-700 p-3"
+                  onClick={() => {
+                    if (url && validatePinterestUrl(url)) {
+                      // Fetch thumbnail preview
+                      const pinId = extractPinId(url);
+                      if (pinId) {
+                        setShowThumbnail(true);
+                        // You could potentially make a lightweight API call here to get the thumbnail
+                        // For now we'll just show the thumbnail placeholder
+                      }
+                    } else {
+                      toast({
+                        title: "Invalid URL",
+                        description: "Please enter a valid Pinterest URL",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                  title="Fetch preview"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M15 3h6v6" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M10 14L21 3" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </Button>
               </div>
               
