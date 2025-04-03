@@ -156,30 +156,62 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
     downloadMedia(currentMedia);
   };
 
-  // Download the current media
+  // Download the current media - optimized for performance
   const downloadMedia = async (mediaItem: PinterestMedia) => {
     try {
-      // For demo purposes, we'll use the mediaUrl directly to avoid any CORS issues
       const mediaUrl = mediaItem.mediaUrl;
       
       if (!mediaUrl) {
         throw new Error("No media URL available");
       }
       
-      console.log("Starting download with URL:", mediaUrl);
+      // Create a filename based on media metadata or fallback to ID
+      const filename = mediaItem.metadata?.title || 
+        `pinterest-${mediaItem.mediaType}-${Date.now().toString(36)}`;
       
-      // Open the URL in a new tab/window for direct download
-      // This is the most reliable method that works across all browsers
-      const filename = mediaItem.metadata?.title || `pinterest-${mediaItem.mediaType}-${mediaItem.id}`;
-      
-      // For most reliable cross-browser download:
-      window.open(mediaUrl, '_blank');
-      
+      // Use fetch API with blob for more reliable downloads
+      // This prevents CORS issues and handles large files better
       toast({
-        title: "Download started",
-        description: "Your file is downloading now. If it doesn't start automatically, check your popup settings.",
+        title: "Starting download...",
+        description: "Preparing your file, please wait.",
       });
       
+      try {
+        // First try the modern approach with fetch
+        const response = await fetch(mediaUrl);
+        
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        // Create temporary download link
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename + (mediaItem.mediaType === 'video' ? '.mp4' : '.jpg');
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl); // Free memory
+        }, 100);
+        
+        toast({
+          title: "Download successful!",
+          description: "Your file has been downloaded.",
+        });
+      } catch (fetchError) {
+        console.log("Fetch download failed, falling back to window.open:", fetchError);
+        // Fallback method for older browsers or CORS issues
+        window.open(mediaUrl, '_blank');
+        
+        toast({
+          title: "Download started in new tab",
+          description: "If it doesn't start automatically, check your popup settings.",
+        });
+      }
     } catch (error) {
       console.error("Download error:", error);
       toast({

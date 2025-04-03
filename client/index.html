@@ -1,13 +1,110 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
+    
+    <!-- Primary Meta Tags -->
+    <title>Pinterest Media Downloader - Download Pinterest Videos & Images in HD</title>
+    <meta name="title" content="Pinterest Media Downloader - Download Pinterest Videos & Images in HD">
+    <meta name="description" content="Free Pinterest Media Downloader tool to save high-quality Pinterest videos and images to your device. No watermarks, no registration required." />
+    <meta name="keywords" content="pinterest downloader, pinterest video downloader, pinterest image downloader, download pinterest media, save pinterest videos, hd pinterest, pinterest no watermark" />
+    <meta name="author" content="Pinterest Media Downloader Tool" />
+    <meta name="robots" content="index, follow" />
+    
+    <!-- Performance Optimization -->
+    <link rel="preload" href="/src/index.css" as="style">
+    <link rel="modulepreload" href="/src/main.tsx" as="script">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:title" content="Pinterest Media Downloader - Download Pinterest Videos & Images" />
+    <meta property="og:description" content="Free tool to download high-quality Pinterest videos and images without watermarks. No registration required." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pinterest-downloader.shakoormalik.repl.co/" />
+    <meta property="og:image" content="https://pinterest-downloader.shakoormalik.repl.co/favicon.png" />
+    <meta property="og:site_name" content="Pinterest Media Downloader" />
+    <meta property="og:locale" content="en_US" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Pinterest Media Downloader - Save Pinterest Videos & Images" />
+    <meta name="twitter:description" content="Download Pinterest videos and images in high quality without watermarks using our free online tool." />
+    <meta name="twitter:image" content="https://pinterest-downloader.shakoormalik.repl.co/favicon.png" />
+    
+    <!-- Canonical and theme -->
+    <link rel="canonical" href="https://pinterest-downloader.shakoormalik.repl.co/" />
+    <meta name="theme-color" content="#E60023" />
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/favicon.png">
+    
+    <!-- Preconnect to improve performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- DNS prefetch for external resources -->
+    <link rel="dns-prefetch" href="//fonts.googleapis.com">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Cache control -->
+    <meta http-equiv="Cache-Control" content="max-age=3600" />
+    
+    <!-- Structured Data - JSON-LD Schema Markup -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Pinterest Media Downloader",
+        "url": "https://pinterest-downloader.shakoormalik.repl.co/",
+        "description": "Free tool to download high-quality Pinterest videos and images without watermarks or registration.",
+        "applicationCategory": "Utility",
+        "operatingSystem": "Any",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "Download Pinterest videos in HD quality",
+          "Download Pinterest images in high resolution",
+          "No watermarks",
+          "No registration required",
+          "Free to use"
+        ],
+        "creator": {
+          "@type": "Organization",
+          "name": "Pinterest Media Downloader"
+        },
+        "inLanguage": "en-US",
+        "datePublished": "2023-04-03T00:00:00+00:00",
+        "dateModified": "2023-04-03T00:00:00+00:00"
+      }
+    </script>
+    
+    <!-- Early loading theme script -->
+    <script>
+      // Check for theme preference
+      (function() {
+        try {
+          const theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.classList.toggle('dark', theme === 'dark');
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <div style="text-align:center;padding:20px;font-family:system-ui,-apple-system,sans-serif;">
+        <h1>Pinterest Media Downloader</h1>
+        <p>Please enable JavaScript to use this application.</p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- This script injects a replit badge into the page, please feel free to remove this line -->
-    <script type="text/javascript" src="https://replit.com/public/js/replit-badge-v3.js"></script>
   </body>
 </html>
