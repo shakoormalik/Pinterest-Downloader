@@ -8,8 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PinterestMedia } from "@shared/schema";
-import { createConfetti } from "@/utils/confetti";
-import { validatePinterestUrl } from "@/utils/validation";
+import { validatePinterestUrl, extractPinId } from "@/utils/validation";
 import useLocalStorage from "@/hooks/useLocalStorage";
 
 interface DownloaderSectionProps {
@@ -25,9 +24,27 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
   const [showPreview, setShowPreview] = useState(false);
   const [currentMedia, setCurrentMedia] = useState<PinterestMedia | null>(null);
   const [recentHistory, setRecentHistory] = useLocalStorage<PinterestMedia[]>("pinterest-history", []);
+  const [showThumbnail, setShowThumbnail] = useState(false);
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Effect for URL changes to show thumbnail preview
+  useEffect(() => {
+    if (url && validatePinterestUrl(url)) {
+      const pinId = extractPinId(url);
+      if (pinId) {
+        // Set a placeholder thumbnail until we have a real API call
+        setThumbnailUrl(`https://placekitten.com/500/500?pin=${pinId}`);
+        setShowThumbnail(true);
+      } else {
+        setShowThumbnail(false);
+      }
+    } else {
+      setShowThumbnail(false);
+    }
+  }, [url]);
 
   // Fetch history from server
   const { data: serverHistory, isLoading: isHistoryLoading } = useQuery({
@@ -51,9 +68,6 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
       const updatedHistory = [data, ...recentHistory.slice(0, 4)];
       setRecentHistory(updatedHistory);
       
-      // Create confetti effect
-      createConfetti();
-      
       // Invalidate history query
       queryClient.invalidateQueries({ queryKey: ['/api/media/history'] });
       
@@ -61,7 +75,6 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
       toast({
         title: "Pinterest media processed!",
         description: "Your content is ready to download.",
-        variant: "success",
       });
       
       // Call parent success handler
@@ -160,14 +173,23 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
       const response = await fetch(`/api/media/download/${mediaItem.id}`);
       const data = await response.json();
       
-      // In a real app, we would handle the actual download
-      // For this demo, we'll just open the URL
-      window.open(data.downloadUrl, '_blank');
-      
-      toast({
-        title: "Download started",
-        description: "Your download has started",
-      });
+      // Create a hidden link element to trigger download directly to user's computer
+      if (data.downloadUrl) {
+        const link = document.createElement('a');
+        link.href = data.downloadUrl;
+        link.download = mediaItem.metadata?.title || `pinterest-${mediaItem.mediaType}-${mediaItem.id}`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast({
+          title: "Download started",
+          description: "Your file is being downloaded to your computer",
+        });
+      } else {
+        throw new Error("Download URL not found");
+      }
     } catch (error) {
       toast({
         title: "Download failed",
@@ -178,7 +200,9 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
   };
 
   // Copy media link to clipboard
-  const copyMediaLink = (mediaUrl: string) => {
+  const copyMediaLink = (mediaUrl: string | null) => {
+    if (!mediaUrl) return;
+    
     navigator.clipboard.writeText(mediaUrl);
     toast({
       title: "Link copied",
@@ -257,6 +281,20 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                   <Clipboard className="h-5 w-5" />
                 </Button>
               </div>
+              
+              {/* Thumbnail preview after URL paste */}
+              {showThumbnail && (
+                <div className="mt-3">
+                  <div className="rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-700 w-1/3 mx-auto aspect-square">
+                    <img 
+                      src={thumbnailUrl}
+                      alt="Content thumbnail" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <p className="text-xs text-center mt-2 text-neutral-500 dark:text-neutral-400">Preview of content to be downloaded</p>
+                </div>
+              )}
             </div>
 
             <div>
@@ -333,7 +371,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
           </div>
 
           {/* Preview Section */}
-          {showPreview && currentMedia && (
+          {showPreview && currentMedia && currentMedia.thumbnailUrl && (
             <div className="mt-8">
               <div className="border-t border-neutral-200 dark:border-neutral-700 pt-6">
                 <h3 className="text-lg font-semibold text-secondary dark:text-dark-text mb-4">Preview</h3>
@@ -396,7 +434,7 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                           variant="secondary"
                           size="icon"
                           className="px-3 py-2"
-                          onClick={() => copyMediaLink(currentMedia.mediaUrl)}
+                          onClick={() => currentMedia.mediaUrl ? copyMediaLink(currentMedia.mediaUrl) : null}
                           title="Copy link"
                         >
                           <Link className="h-4 w-4" />
@@ -445,11 +483,19 @@ export default function DownloaderSection({ onDownloadSuccess, onDownloadError }
                       className="flex items-center bg-neutral-50 dark:bg-dark-bg rounded-lg p-3 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition duration-200"
                     >
                       <div className="w-16 h-16 bg-neutral-200 dark:bg-neutral-700 rounded overflow-hidden flex-shrink-0">
-                        <img 
-                          src={item.thumbnailUrl} 
-                          alt="Pinterest content" 
-                          className="w-full h-full object-cover"
-                        />
+                        {item.thumbnailUrl ? (
+                          <img 
+                            src={item.thumbnailUrl} 
+                            alt="Pinterest content" 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-neutral-300 dark:bg-neutral-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                        )}
                       </div>
                       <div className="ml-4 flex-grow">
                         <div className="flex justify-between">

@@ -8,23 +8,21 @@ import TestimonialsSection from "@/components/TestimonialsSection";
 import FAQSection from "@/components/FAQSection";
 import CTASection from "@/components/CTASection";
 import Footer from "@/components/Footer";
-import SuccessModal from "@/components/SuccessModal";
+
 import ErrorModal from "@/components/ErrorModal";
 import { PinterestMedia } from "@shared/schema";
 
 export default function Home() {
-  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
   const [errorDetails, setErrorDetails] = useState({
     message: "",
     details: ""
   });
-  const [downloadedMedia, setDownloadedMedia] = useState<PinterestMedia | null>(null);
 
   // Function to handle successful download
   const handleDownloadSuccess = (media: PinterestMedia) => {
-    setDownloadedMedia(media);
-    setIsSuccessModalOpen(true);
+    // We don't need to show a success modal anymore
+    // The download will happen directly from the component
   };
 
   // Function to handle download errors
@@ -49,12 +47,6 @@ export default function Home() {
         <CTASection />
       </main>
       <Footer />
-
-      <SuccessModal 
-        isOpen={isSuccessModalOpen} 
-        onClose={() => setIsSuccessModalOpen(false)}
-        media={downloadedMedia}
-      />
       
       <ErrorModal 
         isOpen={isErrorModalOpen}
